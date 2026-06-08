@@ -70,10 +70,25 @@ flags.mark_flags_as_required(["config", "experiment_group", "workdir", "mode"])
 
 @functools.lru_cache(maxsize=1)
 def tokenizer_factory():
+    # ============================================
+    # Added by Louis
+    # this might have to be changed eventually according to where the t5 optimizer is
+    model_path = FLAGS.config.hftr_tokenizer_instance
+    local_path = "/mnt/vast-nhr/projects/bthesis_louis_vonleitner/models/t5-base-local"
+    if model_path == "t5-base" and os.path.isdir(local_path):
+        model_path = local_path
+    # ============================================
+
     return get_tokenizer(
-        FLAGS.config.hftr_tokenizer_name,
-        FLAGS.config.hftr_tokenizer_instance,
-        FLAGS.config.sequence_len,  # Added by Louis
+        tokenizer_name=FLAGS.config.hftr_tokenizer_name,
+        model_name=model_path,
+        # ========================================
+        # Removed by Louis
+        # model_name=FLAGS.config.hftr_tokenizer_instance,
+        # ----------------------------------------
+        # Added by Louis
+        model_max_length=FLAGS.config.sequence_len,
+        # ========================================
     )
 
 

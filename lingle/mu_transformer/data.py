@@ -30,11 +30,23 @@ def get_tokenizer(
     tokenizer_name: str,
     model_name: Optional[str] = None,
     pad_token: Optional[str] = None,
+    **kwargs,  # Added by Louis: to catch extra parameters like sequence len > 512 (Transformer t5 restriction)
 ) -> hftr.PreTrainedTokenizerFast:
     # get class
     cls = getattr(hftr, tokenizer_name)
+
+    # ==============================================
+    # Added by Louis
+    # merge pad_token and any incoming kwargs together
+    if pad_token is not None:
+        kwargs["pad_token"] = pad_token
+
+    # ----------------------------------------------
+    # Removed by Louis
     # instantiate class
-    kwargs = dict(pad_token=pad_token) if pad_token is not None else dict()
+    # kwargs = dict(pad_token=pad_token) if pad_token is not None else dict()
+    # ==============================================
+
     if model_name is not None:
         obj = cls.from_pretrained(model_name, **kwargs)
     else:
