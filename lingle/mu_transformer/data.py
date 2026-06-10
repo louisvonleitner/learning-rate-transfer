@@ -138,7 +138,12 @@ def write_dataset_to_memmap(
 
     # whatever the official split we're working with happens to be,
     # need to shard by host and drop remainder
-    dataset_info = list(hfds.get_dataset_infos(hfds_identifier).values())[0]
+    # =======================================================
+    # Louis removed
+    # dataset_info = list(hfds.get_dataset_infos(hfds_identifier).values())[0]
+    # Louis added
+    dataset_info = hfds.get_dataset_config_info(hfds_identifier, hfds_config)
+    # =======================================================
     try:
         canonical_count = dataset_info.splits.get(hfds_split).num_examples
     except AttributeError as exep:
