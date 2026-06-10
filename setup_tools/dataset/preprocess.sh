@@ -1,7 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=preprocessing
 #SBATCH -p standard96
-#SBATCH -n 96
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=64
 #SBATCH --output=model_preprocessing_test_%j.log
 
 # Tells Hugging Face NOT to attempt any network requests
@@ -35,7 +36,7 @@ module load miniforge3
 
 # --- 2. Activate the Environment ---
 echo "Activating conda environment: mu_transformer"
-conda activate mu_transformer
+conda activate cpu_mu_transformer
 
 cd ../../lingle
 
@@ -46,6 +47,8 @@ if command -v nvidia-smi &> /dev/null; then
     nvidia-smi --query-gpu=index,name,memory.total --format=csv
 fi
 echo "--------------------------------------------------"
+
+export JAX_PLATFORMS=cpu
 
 # --- 4. Execute the Target Script ---
 echo "Launching model training..."
