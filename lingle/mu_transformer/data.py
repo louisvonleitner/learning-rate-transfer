@@ -74,6 +74,162 @@ def get_arr_dtype(vocab_size):
     return np.uint16
 
 
+# ====================================================
+# Louis removed code
+# def write_dataset_to_memmap(
+#     hfds_identifier: str,
+#     hfds_config: str,
+#     hfds_datacol: str,
+#     hfds_buffer_size: int,
+#     hftr_tokenizer: hftr.PreTrainedTokenizerFast,
+#     split_name: str,
+#     batch_size: int,  # batch size per host
+#     sequence_len: int,
+#     n_shard: int,
+#     shard_id: int,
+#     workdir: str,
+# ) -> str:
+#     workdir_fp = get_shard_fp(workdir, hfds_identifier, split_name, n_shard, shard_id)
+#     temp_fp = posixpath.join("/tmp/", posixpath.split(workdir_fp)[-1])
+
+#     if blobfile.exists(workdir_fp):
+#         logging.info(f"Mem-mapped file exists at {workdir_fp}, skipping write...")
+#         return workdir_fp
+#     if os.path.exists(temp_fp):
+#         os.remove(temp_fp)
+
+#     assert hftr_tokenizer.is_fast
+#     assert n_shard == jax.process_count()  # during writing we assume n_shard = n_host
+
+#     # get available splits, and pick one.
+#     hfds_splits_set = set(hfds.get_dataset_split_names(hfds_identifier, hfds_config))
+#     if hfds_splits_set != {"train", "validation", "test"}:
+#         # we'll split the training data later, since there aren't enough provided splits
+#         hfds_split = "train"
+#     else:
+#         logging.info(f"hfds_splits_set: {hfds_splits_set}")
+#         hfds_split = split_name
+#     assert hfds_split in hfds_splits_set
+
+#     # load dataset lazily
+#     ds = hfds.load_dataset(
+#         hfds_identifier,
+#         hfds_config,
+#         split=hfds_split,
+#         streaming=True,
+#     )
+
+#     # shard by host, then tokenize the host's shard only
+#     def processing_fn(examples):
+#         examples = examples[hfds_datacol]
+#         examples = [e for i, e in enumerate(examples) if i % n_shard == shard_id]
+#         ids = hftr_tokenizer(
+#             examples,
+#             padding="max_length",
+#             truncation=True,
+#             max_length=sequence_len,
+#         )["input_ids"]
+#         return {"ids": ids}
+
+#     ds = ds.map(
+#         processing_fn,
+#         batched=True,
+#         batch_size=hfds_buffer_size * n_shard,
+#         remove_columns=list(ds.column_names),
+#     )
+
+#     # whatever the official split we're working with happens to be,
+#     # need to shard by host and drop remainder
+#     # =======================================================
+#     # Louis removed
+#     # dataset_info = list(hfds.get_dataset_infos(hfds_identifier).values())[0]
+#     # Louis added
+#     dataset_info = hfds.get_dataset_config_info(hfds_identifier, hfds_config)
+#     # =======================================================
+#     try:
+#         canonical_count = dataset_info.splits.get(hfds_split).num_examples
+#     except AttributeError as exep:
+#         logging.error("You're using a bad dataset, it has no num_examples metadata...")
+#         raise exep
+#     sharded_canonical_count = canonical_count // n_shard
+#     ds = ds.take(sharded_canonical_count)
+
+#     # if need be, split the training set into train/validation/test.
+#     # also, store the count for what's selected
+#     if hfds_splits_set != {"train", "validation", "test"}:
+#         sharded_val_count = batch_size * 100
+#         if split_name == "validation":
+#             sharded_split_count = sharded_val_count
+#             ds = ds.take(sharded_split_count)
+#         elif split_name == "test":
+#             sharded_split_count = sharded_val_count
+#             ds = ds.skip(sharded_val_count).take(sharded_split_count)
+#         elif split_name == "train":
+#             sharded_split_count = sharded_canonical_count - 2 * sharded_val_count
+#             ds = ds.skip(2 * sharded_val_count).take(sharded_split_count)
+#         else:
+#             raise NotImplementedError("Unrecognized split name")
+#     else:
+#         sharded_split_count = sharded_canonical_count
+#         ds = ds.take(sharded_split_count)
+
+#     # note that currently the shards on all hosts have the same example count.
+#     # in addition, we want this example count to be divisible by the batch size per host
+#     # and by the write buffer size.
+#     write_buffer_size = hfds_buffer_size
+#     lcm = math.lcm(write_buffer_size, batch_size)
+#     writable_count = (sharded_split_count // lcm) * lcm
+#     assert writable_count > 0
+#     assert writable_count % batch_size == 0
+#     assert writable_count % write_buffer_size == 0
+
+#     # so make an iterator
+#     ds = ds.take(writable_count)
+#     ds = ds.iter(batch_size=write_buffer_size, drop_last_batch=True)
+
+#     # write to memmapped file
+#     n_shard_tokens = writable_count * sequence_len
+#     n_write_tokens_per_iter = write_buffer_size * sequence_len
+#     n_write_iters = writable_count // write_buffer_size
+#     logging.info(f"n_shard_tokens: {n_shard_tokens}")
+#     logging.info(f"n_write_tokens_per_iter: {n_write_tokens_per_iter}")
+#     logging.info(f"n_write_iters: {n_write_iters}")
+#     arr_dtype = get_arr_dtype(hftr_tokenizer.vocab_size)
+#     arr = np.memmap(temp_fp, dtype=arr_dtype, mode="w+", shape=(n_shard_tokens,))
+#     idx = 0
+#     for _ in tqdm.tqdm(range(n_write_iters), desc=f"Writing {temp_fp} with memmap"):
+#         batch = None
+#         while batch is None:
+#             try:
+#                 batch = next(ds)["ids"]
+#             except BaseException as e:
+#                 time.sleep(1)
+#         arr_batch = np.array(batch, dtype=arr_dtype).reshape(-1)
+#         arr[idx : idx + n_write_tokens_per_iter] = arr_batch
+#         idx += n_write_tokens_per_iter
+#     arr.flush()
+
+#     logging.info(f"Copying {temp_fp} to {workdir_fp}")
+#     blobfile.copy(temp_fp, workdir_fp, overwrite=True)
+#     return workdir_fp
+
+
+# -------------------------------------------------------------
+# Louis added code
+import os
+import math
+import time
+import logging
+import posixpath
+import numpy as np
+import filelock
+import blobfile
+import tqdm
+import datasets as hfds
+import transformers as hftr
+from pathlib import Path
+
+
 def write_dataset_to_memmap(
     hfds_identifier: str,
     hfds_config: str,
@@ -81,12 +237,13 @@ def write_dataset_to_memmap(
     hfds_buffer_size: int,
     hftr_tokenizer: hftr.PreTrainedTokenizerFast,
     split_name: str,
-    batch_size: int,  # batch size per host
+    batch_size: int,
     sequence_len: int,
     n_shard: int,
     shard_id: int,
     workdir: str,
 ) -> str:
+    # 1. Resolve target file paths
     workdir_fp = get_shard_fp(workdir, hfds_identifier, split_name, n_shard, shard_id)
     temp_fp = posixpath.join("/tmp/", posixpath.split(workdir_fp)[-1])
 
@@ -96,120 +253,125 @@ def write_dataset_to_memmap(
     if os.path.exists(temp_fp):
         os.remove(temp_fp)
 
-    assert hftr_tokenizer.is_fast
-    assert n_shard == jax.process_count()  # during writing we assume n_shard = n_host
+    # 2. Bypass cluster-wide file lock deadlocks on shared filesystems
+    class DummyFileLock:
+        def __init__(self, *args, **kwargs):
+            pass
 
-    # get available splits, and pick one.
+        def acquire(self, *args, **kwargs):
+            return self
+
+        def release(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args, **kwargs):
+            pass
+
+    filelock.FileLock = DummyFileLock
+
+    # 3. Load dataset using the default cluster cache settings (so it finds your VAST cache)
     hfds_splits_set = set(hfds.get_dataset_split_names(hfds_identifier, hfds_config))
     if hfds_splits_set != {"train", "validation", "test"}:
-        # we'll split the training data later, since there aren't enough provided splits
         hfds_split = "train"
     else:
-        logging.info(f"hfds_splits_set: {hfds_splits_set}")
         hfds_split = split_name
-    assert hfds_split in hfds_splits_set
 
-    # load dataset lazily
+    logging.info(f"Loading dataset split '{hfds_split}' from local cluster cache...")
     ds = hfds.load_dataset(
         hfds_identifier,
         hfds_config,
         split=hfds_split,
-        streaming=True,
+        streaming=False,
     )
 
-    # shard by host, then tokenize the host's shard only
+    # 4. Shard immediately so each node only processes its 1/8th slice
+    if n_shard > 1:
+        logging.info(f"Sharding dataset for Host {shard_id + 1}/{n_shard}...")
+        ds = ds.shard(num_shards=n_shard, index=shard_id)
+
+    # 5. NOW redirect intermediate map caches to local node /tmp
+    # This prevents the 64-core parallel map from thrashing your shared VAST storage
+    os.makedirs(f"/tmp/hf_cache_{shard_id}", exist_ok=True)
+    hfds.config.HF_DATASETS_CACHE = Path(f"/tmp/hf_cache_{shard_id}")
+
+    # 6. Tokenize using all 64 CPU cores in parallel
+    logging.info("Mapping tokenization function with 64 parallel processes...")
+    remove_cols = (
+        list(ds.column_names) if hasattr(ds, "column_names") else [hfds_datacol]
+    )
+
     def processing_fn(examples):
-        examples = examples[hfds_datacol]
-        examples = [e for i, e in enumerate(examples) if i % n_shard == shard_id]
-        ids = hftr_tokenizer(
-            examples,
+        return hftr_tokenizer(
+            examples[hfds_datacol],
             padding="max_length",
             truncation=True,
             max_length=sequence_len,
-        )["input_ids"]
-        return {"ids": ids}
+        )
 
     ds = ds.map(
         processing_fn,
         batched=True,
-        batch_size=hfds_buffer_size * n_shard,
-        remove_columns=list(ds.column_names),
+        batch_size=hfds_buffer_size,
+        num_proc=64,  # Harness full machine capability
+        remove_columns=remove_cols,
     )
 
-    # whatever the official split we're working with happens to be,
-    # need to shard by host and drop remainder
-    # =======================================================
-    # Louis removed
-    # dataset_info = list(hfds.get_dataset_infos(hfds_identifier).values())[0]
-    # Louis added
-    dataset_info = hfds.get_dataset_config_info(hfds_identifier, hfds_config)
-    # =======================================================
-    try:
-        canonical_count = dataset_info.splits.get(hfds_split).num_examples
-    except AttributeError as exep:
-        logging.error("You're using a bad dataset, it has no num_examples metadata...")
-        raise exep
-    sharded_canonical_count = canonical_count // n_shard
-    ds = ds.take(sharded_canonical_count)
-
-    # if need be, split the training set into train/validation/test.
-    # also, store the count for what's selected
+    # 7. Apply train/val/test splits safely along map cuts if non-standard
     if hfds_splits_set != {"train", "validation", "test"}:
         sharded_val_count = batch_size * 100
         if split_name == "validation":
-            sharded_split_count = sharded_val_count
-            ds = ds.take(sharded_split_count)
+            ds = ds.select(range(sharded_val_count))
         elif split_name == "test":
-            sharded_split_count = sharded_val_count
-            ds = ds.skip(sharded_val_count).take(sharded_split_count)
+            ds = ds.select(range(sharded_val_count, 2 * sharded_val_count))
         elif split_name == "train":
-            sharded_split_count = sharded_canonical_count - 2 * sharded_val_count
-            ds = ds.skip(2 * sharded_val_count).take(sharded_split_count)
-        else:
-            raise NotImplementedError("Unrecognized split name")
-    else:
-        sharded_split_count = sharded_canonical_count
-        ds = ds.take(sharded_split_count)
+            ds = ds.select(range(2 * sharded_val_count, len(ds)))
 
-    # note that currently the shards on all hosts have the same example count.
-    # in addition, we want this example count to be divisible by the batch size per host
-    # and by the write buffer size.
-    write_buffer_size = hfds_buffer_size
-    lcm = math.lcm(write_buffer_size, batch_size)
-    writable_count = (sharded_split_count // lcm) * lcm
-    assert writable_count > 0
-    assert writable_count % batch_size == 0
-    assert writable_count % write_buffer_size == 0
+    # 8. Align batch bounds and write directly to the local binary file
+    lcm = math.lcm(hfds_buffer_size, batch_size)
+    writable_count = (len(ds) // lcm) * lcm
 
-    # so make an iterator
-    ds = ds.take(writable_count)
-    ds = ds.iter(batch_size=write_buffer_size, drop_last_batch=True)
-
-    # write to memmapped file
     n_shard_tokens = writable_count * sequence_len
-    n_write_tokens_per_iter = write_buffer_size * sequence_len
-    n_write_iters = writable_count // write_buffer_size
-    logging.info(f"n_shard_tokens: {n_shard_tokens}")
-    logging.info(f"n_write_tokens_per_iter: {n_write_tokens_per_iter}")
-    logging.info(f"n_write_iters: {n_write_iters}")
     arr_dtype = get_arr_dtype(hftr_tokenizer.vocab_size)
     arr = np.memmap(temp_fp, dtype=arr_dtype, mode="w+", shape=(n_shard_tokens,))
+
+    n_write_tokens_per_iter = hfds_buffer_size * sequence_len
+    n_write_iters = writable_count // hfds_buffer_size
+
+    logging.info(f"Writing tokenized dataset to local node path {temp_fp}...")
     idx = 0
-    for _ in tqdm.tqdm(range(n_write_iters), desc=f"Writing {temp_fp} with memmap"):
-        batch = None
-        while batch is None:
-            try:
-                batch = next(ds)["ids"]
-            except BaseException as e:
-                time.sleep(1)
+    for i in tqdm.tqdm(range(n_write_iters), desc=f"Writing {temp_fp}"):
+        batch = ds[i * hfds_buffer_size : (i + 1) * hfds_buffer_size]["input_ids"]
         arr_batch = np.array(batch, dtype=arr_dtype).reshape(-1)
         arr[idx : idx + n_write_tokens_per_iter] = arr_batch
         idx += n_write_tokens_per_iter
-    arr.flush()
 
-    logging.info(f"Copying {temp_fp} to {workdir_fp}")
+    arr.flush()
+    logging.info(f"Successfully finished writing local file {temp_fp}.")
+
+    # 9. Copy local completed file back to shared cluster storage and clean up
+    logging.info(
+        f"Copying complete file {temp_fp} to permanent destination {workdir_fp}..."
+    )
     blobfile.copy(temp_fp, workdir_fp, overwrite=True)
+
+    if os.path.exists(temp_fp):
+        os.remove(temp_fp)
+
+    # Clean up local map cache directory to keep /tmp pristine
+    try:
+        import shutil
+
+        shutil.rmtree(f"/tmp/hf_cache_{shard_id}")
+    except Exception:
+        pass
+
     return workdir_fp
+
+
+# ====================================================
 
 
 def read_dataset_to_memmap(
