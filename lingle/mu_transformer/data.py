@@ -243,6 +243,17 @@ def write_dataset_to_memmap(
     shard_id: int,
     workdir: str,
 ) -> str:
+    # === NEW OPTIMIZATION: FIX JAX FORK DEADLOCK ===
+    # Forces 64 workers to cleanly spawn fresh processes instead of breaking JAX threads
+    import multiprocess
+
+    try:
+        multiprocess.set_start_method("spawn", force=True)
+        logging.info("Successfully set multiprocessing start method to 'spawn'.")
+    except RuntimeWarning:
+        pass
+    # ===============================================
+
     # 1. Resolve target file paths
     workdir_fp = get_shard_fp(workdir, hfds_identifier, split_name, n_shard, shard_id)
     temp_fp = posixpath.join("/tmp/", posixpath.split(workdir_fp)[-1])
@@ -255,6 +266,7 @@ def write_dataset_to_memmap(
 
     # 2. Bypass cluster-wide file lock deadlocks on shared filesystems
     class DummyFileLock:
+
         def __init__(self, *args, **kwargs):
             pass
 
@@ -297,6 +309,19 @@ def write_dataset_to_memmap(
     os.makedirs(f"/tmp/hf_cache_{shard_id}", exist_ok=True)
     hfds.config.HF_DATASETS_CACHE = Path(f"/tmp/hf_cache_{shard_id}")
 
+    # === NEW OPTIMIZATION: PREVENT THREAD EXPLOSION ===
+    # Stops the 64 Rust tokenizers from spinning up 64 sub-threads each (4,096 threads total)
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    # Generate explicit local /tmp filenames for all 64 worker shards
+    map_cache_files = [
+        f"/tmp/hf_cache_{shard_id}/map_cache_worker_{i}.arrow" for i in range(64)
+    ]
+    for cache_f in map_cache_files:
+        if os.path.exists(cache_f):
+            os.remove(cache_f)
+    # ==================================================
+
     # 6. Tokenize using all 64 CPU cores in parallel
     logging.info("Mapping tokenization function with 64 parallel processes...")
     remove_cols = (
@@ -317,6 +342,7 @@ def write_dataset_to_memmap(
         batch_size=hfds_buffer_size,
         num_proc=64,  # Harness full machine capability
         remove_columns=remove_cols,
+        cache_file_names=map_cache_files,  # === NEW OPTIMIZATION: FORCES LOCAL WRITE ===
     )
 
     # 7. Apply train/val/test splits safely along map cuts if non-standard
