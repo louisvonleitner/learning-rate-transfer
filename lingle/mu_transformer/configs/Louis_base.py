@@ -17,6 +17,7 @@ from ml_collections import config_dict
 def get_base_config():
     config = config_dict.ConfigDict()
 
+    # this means we are running on a single GPU
     config.n_mesh_rows = 1
     config.n_mesh_cols = 1
 
@@ -32,7 +33,7 @@ def get_base_config():
     config.hfds_config = "en"
     config.hfds_datacol = "text"
     config.hfds_buffer_size = 512  # example buffer length for batched tokenization
-    config.sequence_len = 256
+    config.sequence_len = 1024
     config.force_download = True  # should be true unless you know what you're doing
     config.n_ds_shard = 0  # 0 = shard by host; less < n_host = subshard existing shards
 
@@ -61,7 +62,7 @@ def get_base_config():
 
     # optimization
     config.tokens_per_global_batch = (
-        256 * config.sequence_len
+        256 * config.sequence_len  # batch size of 256 kept constant
     )  # batch size * sequence len
     config.grad_acc_steps = 1  # steps per parameter update (for micro-batching)
     config.grad_clip = 1.0  # grad clip max l2 norm

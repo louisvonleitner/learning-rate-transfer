@@ -4,6 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
 #SBATCH --output=model_preprocessing_test_%j.log
+#SBATCH --time=16:00:00
 
 # Tells Hugging Face NOT to attempt any network requests
 export HF_DATASETS_OFFLINE=1
