@@ -1,25 +1,41 @@
 import numpy as np
 import pandas as pd
-import os
 from datetime import datetime
 
+import os
+import sys
+
+from absl import flags
+import jax
+
+# import Lingle adapted functions
+from mu_transformer.jax_impl.launch import main as third_party_main
 from mu_transformer.configs.Louis_base import get_config
+
+# 1. THE TRICK: Silently initialize ABSL flags with just the script name.
+# This prevents the "UnparsedFlagAccessError" without actually requiring CLI inputs.
+FLAGS = flags.FLAGS
+if not FLAGS.is_parsed():
+    FLAGS(sys.argv[:1])
 
 
 class TrainingRun:
 
-    def __init__(self, config, d_model, base_lr, n_training_tokens=None):
+    def __init__(
+        self,
+        d_model: int,
+        base_lr: float,
+        workdir: str = "./test_run",
+        n_training_tokens=None,
+    ):
 
-        # get base config that we can work on
-        self.cfg = config
+        # get base config
+        self.cfg = get_config()
 
         # model parameters
         self.d_model = d_model
-        self.cfg.d_model = d_model
         self.model_depth = 24  # same over all experiments
-        self.cfg.n_layer = self.model_depth
         self.head_dimension = 128  # same over all experiments
-        self.cfg.d_head = self.head_dimension
         assert self.d_model % self.head_dimension == 0
         self.n_heads = self.d_model / self.head_dimension
         self.d_ffn = d_model * 4
@@ -31,9 +47,9 @@ class TrainingRun:
         self.n_params_decoder = self.n_params_embedding
         self.n_params_mha = self.d_model**2
         self.n_params_rms_norm = self.d_model
-        self.n_params_FFN = 2 * (self.d_ffn * self.d_model)
+        self.n_params_ffn = 2 * (self.d_ffn * self.d_model)
         self.n_params_transformer_block = sum(
-            [self.n_params_mha, self.n_params_rms_norm, self.n_params_FFN]
+            [self.n_params_mha, self.n_params_rms_norm, self.n_params_ffn]
         )
         self.n_parameters = sum(
             [
@@ -44,9 +60,7 @@ class TrainingRun:
         )
 
         # optimization parameters
-        # TODO: To be changed and updated
         self.base_lr = base_lr
-        self.cfg.lr_base = self.base_lr
         self.max_lr = self.base_lr
         self.lr_schedule_name = self.cfg.lr_schedule_name
         self.optim_name = self.cfg.optim_name
@@ -71,13 +85,23 @@ class TrainingRun:
         self.n_pretrain_steps = np.ceil(
             self.n_training_tokens / self.tokens_per_global_batch
         )
-        self.cfg.n_pretrain_steps = self.n_pretrain_steps
         self.n_warmup_steps = self.determine_n_warmup_steps()
-        self.cfg.n_warmup_steps = self.n_warmup_steps
 
         assert self.n_warmup_steps <= self.n_pretrain_steps
 
-        self.absolute_lrs = absolute_lrs  # <-- get this form Lingle script
+        # getting absolute lrs after mup
+        self.absolute_lrs = self.get_abs_mup_scaling(
+            base_lr=self.base_lr, d_model=self.d_model
+        )
+        self.embedding_matrix_lr = self.absolute_lrs["embedding_matrix_lr"]
+        self.attention_weight_matrix_lr = self.absolute_lrs[
+            "attention_weight_matrix_lr"
+        ]
+        self.unembedding_matrix_lr = self.absolute_lrs["unembedding_matrix_lr"]
+        self.attention_bias_lr = self.absolute_lrs["attention_bias_lr"]
+        self.w_ffn_in_lr = self.absolute_lrs["w_ffn_in_lr"]
+        self.w_ffn_out_lr = self.absolute_lrs["w_ffn_out_lr"]
+        self.bias_lr = self.absolute_lrs["bias_lr"]
 
         # tracking model runs and results
         self.run_id = self.generate_run_id()
@@ -92,11 +116,36 @@ class TrainingRun:
         self.determine_theoretical_flops_and_walltime()
 
         # results
-        # TODO: set up this extraction
         self.final_loss = None
         self.best_loss = None
         self.training_wall_time = None
         self.training_loss_time_series = None
+
+        # modify base config
+        # ===================================================================
+        self.cfg.d_model = self.d_model
+        self.cfg.lr_base = self.base_lr
+        self.cfg.n_layer = self.model_depth
+        self.cfg.d_head = self.head_dimension
+        self.cfg.n_pretrain_steps = self.n_pretrain_steps
+        self.cfg.n_warmup_steps = self.n_warmup_steps
+
+        # 3. Spoof the FLAGS object for the third-party library.
+        # ===================================================================
+        # You must set every flag that `main()` explicitly calls in its logging/setup block.
+        FLAGS.config = self.cfg
+        FLAGS.mode = "train"
+        FLAGS.workdir = workdir
+
+        # Mocking the remaining flags from the third-party main() snippet you provided
+        FLAGS.experiment_group = "grid_search"
+        FLAGS.rng_seed = 42
+        FLAGS.rng_fold = 0
+        FLAGS.wb_enabled = True  # Set to True if you want wandb
+        FLAGS.wb_run = None
+        FLAGS.load_suffix = ""
+        FLAGS.save_suffix = ""
+        FLAGS.verbosity = 0
 
     def generate_run_id(self):
         return str(self.d_model) + "_" + str(datetime.now())
@@ -163,6 +212,23 @@ class TrainingRun:
             self.realistic_theoretical_training_walltime,
         )
 
+    def get_abs_mup_scaling(self, base_lr, d_model, ffn_factor=4):
+        dm = d_model
+        dff = d_model * ffn_factor
+        return {
+            # embeddings
+            "embedding_matrix_lr": lr,
+            # attention
+            "attention_weight_matrix_lr": lr / dm,
+            "attention_bias_lr": lr,
+            # feed-forward
+            "w_ffn_in_lr": lr / dm,
+            "w_ffn_out_lr": lr / dff,
+            "bias_lr": lr,
+            # unembedding
+            "unembedding_matrix_lr": lr / dm,
+        }
+
     def save_run_results(self, variables_to_save=None):
         """
         Save all run results, including the following:
@@ -190,10 +256,25 @@ class TrainingRun:
                 "n_parameters",
                 "base_lr",
                 "max_lr",
-                "warmup_iterations",
-                "n_pretrain_steps",
+                "lr_schedule_name",
+                "optim_name",
+                "optim_beta1",
+                "optim_beta2",
+                "optim_eps",
+                "weight_decay",
                 "n_training_tokens",
-                "absolute_lrs",
+                "training_tokens_per_global_batch",
+                "batch_size",
+                "sequence_len",
+                "n_pretrain_steps",
+                "n_warmup_steps",
+                "embedding_matrix_lr",
+                "attention_weight_matrix_lr",
+                "attention_bias_lr",
+                "w_ffn_in_lr",
+                "w_ffn_out_lr",
+                "bias_lr",
+                "unembedding_matrix_lr",
                 "run_id",
                 "run_folder_path",
                 "run_losses_df_path",
@@ -238,23 +319,41 @@ class TrainingRun:
         """
         pass
 
-    def launch_run(self, mode, train_loop_fn, eval_loop_fn, sampling_loop_fn):
-        """Dispatches execution to execution loops based on current global mode flags."""
-        start_time = datetime.now()
+    def launch(self):
+        print(f"Launching run with d_model={self.cfg.d_model}, lr={self.cfg.lr_base}")
 
-        if mode == "train":
-            if self.cfg.is_sweep:
-                # Add your sweep handling code here
-                train_loop_fn()
-            else:
-                train_loop_fn()
-        elif mode in {"validation", "test"}:
-            eval_metrics = eval_loop_fn(params=None, n_eval_step=None, mode=mode)
-            self.final_loss = eval_metrics.get("loss_avg")
-        elif mode == "sample":
-            sampling_loop_fn()
+        # Prevent JAX double-initialization crash during loops
+        if (
+            jax.process_index() == 0
+            and not jax.distributed.global_state.is_initialized()
+        ):
+            try:
+                jax.distributed.initialize()
+            except RuntimeError:
+                pass
+
+        # launching Lingle model training
+        run_stats = third_party_main(None)
+
+        # saving run state
+        if run_stats is not None:
+            self.training_wall_time = run_stats["training_wall_time"]
+            self.training_loss_time_series = run_stats["loss_time_series"]
+            self.best_loss = run_stats["best_loss"]
+            self.final_loss = run_stats["final_loss"]
+
+        # run_stats is None
         else:
-            raise NotImplementedError
+            print("Run stats are 'None'. Something did not work!")
 
-        self.training_wall_time = (datetime.now() - start_time).total_seconds()
-        self.save_run_results()
+        return run_stats
+
+
+if __name__ == "__main__":
+    # Example: A simple Pythonic loop for a grid search
+    learning_rates = [0.01, 0.005]
+
+    for lr in learning_rates:
+        runner = TrainingRun(d_model=128, base_lr=lr)
+        runner.launch()
+        runner.save_run_results()
