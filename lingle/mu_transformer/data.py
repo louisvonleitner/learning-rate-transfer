@@ -254,15 +254,20 @@ def write_dataset_to_memmap(
         pass
     # ===============================================
 
-    # 1. Resolve target file paths
+    # 1. Resolve target file paths and configure High-Capacity Cluster Storage
     workdir_fp = get_shard_fp(workdir, hfds_identifier, split_name, n_shard, shard_id)
-    temp_fp = posixpath.join("/tmp/", posixpath.split(workdir_fp)[-1])
 
-    if blobfile.exists(workdir_fp):
-        logging.info(f"Mem-mapped file exists at {workdir_fp}, skipping write...")
-        return workdir_fp
-    if os.path.exists(temp_fp):
-        os.remove(temp_fp)
+    # NEW LOGIC: Bypass RAM-bound TMPDIR.
+    # Prioritize Shared SSD, then Hybrid Shared, and use your VAST project folder as the ultimate safety net.
+    fallback_tmp = posixpath.join(workdir, "tmp")
+    base_tmp_dir = os.environ.get(
+        "SHARED_SSD_TMPDIR", os.environ.get("SHARED_TMPDIR", fallback_tmp)
+    )
+    os.makedirs(base_tmp_dir, exist_ok=True)
+
+    temp_fp = posixpath.join(base_tmp_dir, posixpath.split(workdir_fp)[-1])
+
+    logging.info(f"Using temporary directory: {base_tmp_dir}")
 
     # 2. Bypass cluster-wide file lock deadlocks on shared filesystems
     class DummyFileLock:
@@ -304,17 +309,15 @@ def write_dataset_to_memmap(
         logging.info(f"Sharding dataset for Host {shard_id + 1}/{n_shard}...")
         ds = ds.shard(num_shards=n_shard, index=shard_id)
 
-    # 5. NOW redirect intermediate map caches to local node /tmp
-    # This prevents the 64-core parallel map from thrashing your shared VAST storage
-    os.makedirs(f"/tmp/hf_cache_{shard_id}", exist_ok=True)
-    hfds.config.HF_DATASETS_CACHE = Path(f"/tmp/hf_cache_{shard_id}")
+    # 5. NOW redirect intermediate map caches to a high-capacity temporary path
+    # CHANGE 2: Create a cache directory dynamically based on your scratch space
+    cache_dir = posixpath.join(base_tmp_dir, f"hf_cache_{shard_id}")
+    os.makedirs(cache_dir, exist_ok=True)
+    hfds.config.HF_DATASETS_CACHE = Path(cache_dir)
 
-    # === FIXED: PREVENT THREAD EXPLOSION & DEFINE SINGULAR CACHE PATH ===
+    # === FIXED: PREVENT THREAD EXPLOSION ===
     # Stops the 64 Rust tokenizers from spinning up 64 sub-threads each
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-    # Define a single base path. HF automatically breaks this into 64 files internally.
-    map_cache_file = f"/tmp/hf_cache_{shard_id}/map_cache.arrow"
     # ====================================================================
 
     # 6. Tokenize using all 64 CPU cores in parallel
@@ -331,13 +334,13 @@ def write_dataset_to_memmap(
             max_length=sequence_len,
         )
 
+    # CHANGE 3: Removed cache_file_name. HF will automatically generate the 64 parallel cache files safely inside `cache_dir`
     ds = ds.map(
         processing_fn,
         batched=True,
         batch_size=hfds_buffer_size,
         num_proc=64,  # Harness full machine capability
         remove_columns=remove_cols,
-        cache_file_name=map_cache_file,  # <-- FIXED: Singular argument name with a string
     )
 
     # 7. Apply train/val/test splits safely along map cuts if non-standard
@@ -381,11 +384,11 @@ def write_dataset_to_memmap(
     if os.path.exists(temp_fp):
         os.remove(temp_fp)
 
-    # Clean up local map cache directory to keep /tmp pristine
+    # CHANGE 4: Clean up the dynamically assigned cache directory instead of hardcoded /tmp
     try:
         import shutil
 
-        shutil.rmtree(f"/tmp/hf_cache_{shard_id}")
+        shutil.rmtree(cache_dir)
     except Exception:
         pass
 
