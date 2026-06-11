@@ -309,18 +309,13 @@ def write_dataset_to_memmap(
     os.makedirs(f"/tmp/hf_cache_{shard_id}", exist_ok=True)
     hfds.config.HF_DATASETS_CACHE = Path(f"/tmp/hf_cache_{shard_id}")
 
-    # === NEW OPTIMIZATION: PREVENT THREAD EXPLOSION ===
-    # Stops the 64 Rust tokenizers from spinning up 64 sub-threads each (4,096 threads total)
+    # === FIXED: PREVENT THREAD EXPLOSION & DEFINE SINGULAR CACHE PATH ===
+    # Stops the 64 Rust tokenizers from spinning up 64 sub-threads each
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-    # Generate explicit local /tmp filenames for all 64 worker shards
-    map_cache_files = [
-        f"/tmp/hf_cache_{shard_id}/map_cache_worker_{i}.arrow" for i in range(64)
-    ]
-    for cache_f in map_cache_files:
-        if os.path.exists(cache_f):
-            os.remove(cache_f)
-    # ==================================================
+    # Define a single base path. HF automatically breaks this into 64 files internally.
+    map_cache_file = f"/tmp/hf_cache_{shard_id}/map_cache.arrow"
+    # ====================================================================
 
     # 6. Tokenize using all 64 CPU cores in parallel
     logging.info("Mapping tokenization function with 64 parallel processes...")
@@ -342,7 +337,7 @@ def write_dataset_to_memmap(
         batch_size=hfds_buffer_size,
         num_proc=64,  # Harness full machine capability
         remove_columns=remove_cols,
-        cache_file_names=map_cache_files,  # === NEW OPTIMIZATION: FORCES LOCAL WRITE ===
+        cache_file_name=map_cache_file,  # <-- FIXED: Singular argument name with a string
     )
 
     # 7. Apply train/val/test splits safely along map cuts if non-standard
