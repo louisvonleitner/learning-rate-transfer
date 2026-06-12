@@ -1074,7 +1074,7 @@ def main(argv):
     logging.info("=== Start of main() ===")
 
     # 1. ADDED GUARD: Prevent crash during grid search loops
-    if jax.process_index() == 0 and not jax.distributed.global_state.is_initialized():
+    if jax.process_index() == 0 and not jax.distributed.is_initialized():
         try:
             jax.distributed.initialize()
         except RuntimeError:
