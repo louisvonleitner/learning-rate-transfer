@@ -349,6 +349,51 @@ class TrainingRun:
         return run_stats
 
 
+class HyperparameterGrid:
+
+    def __init__(self, grid_with_results: dict = None):
+
+        # sweep variables
+        if grid_with_results is None:
+            self.base_learning_rates = []
+            self.base_init_variances = []
+
+            self.update_sweep_variables()
+
+        # if grid_with_results exists
+        else:
+            # TODO: read out grid and optimal lr and init var
+            pass
+
+    def update_sweep_variables(variables: list = None):
+        self.potential_sweep_variables = {
+            "base_lr": self.base_learning_rates,
+            "base_init_var": self.base_init_variances,
+        }
+        self.sweep_variables = self.potential_sweep_variables[variables]
+
+    def populate_naive_grid(self, n_lrs: int = 5, n_init_vars: int = 5):
+        """
+        Naive grid with parameter spacing log2 base.
+        """
+        min_lr_exponent = -10  # e.g. 2^{-10}
+        max_lr_exponent = -2  # e.g. 2^{-2}
+
+        learning_rates = np.logspace(min_lr_exponent, max_lr_exponent, n_lrs, base=2)
+
+        min_init_var_exponent = -5
+        max_init_var_exponent = 5
+
+        init_variances = np.logspace(
+            min_init_var_exponent, max_init_var_exponent, n_init_vars, base=2
+        )
+
+        self.base_learning_rates = learning_rates
+        self.base_init_variances = init_variances
+
+        return {"learning_rates": learning_rates, "init_variances": init_variances}
+
+
 if __name__ == "__main__":
     # Example: A simple Pythonic loop for a grid search
     learning_rates = [0.01, 0.005]
