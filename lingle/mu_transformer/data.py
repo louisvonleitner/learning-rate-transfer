@@ -243,8 +243,6 @@ def write_dataset_to_memmap(
     shard_id: int,
     workdir: str,
 ) -> str:
-    # === NEW OPTIMIZATION: FIX JAX FORK DEADLOCK ===
-    # Forces 64 workers to cleanly spawn fresh processes instead of breaking JAX threads
     import multiprocess
 
     try:
@@ -252,26 +250,25 @@ def write_dataset_to_memmap(
         logging.info("Successfully set multiprocessing start method to 'spawn'.")
     except RuntimeWarning:
         pass
-    # ===============================================
 
-    # 1. Resolve target file paths and configure High-Capacity Cluster Storage
+    # 1. Resolve target file paths
     workdir_fp = get_shard_fp(workdir, hfds_identifier, split_name, n_shard, shard_id)
 
-    # NEW LOGIC: Bypass RAM-bound TMPDIR.
-    # Prioritize Shared SSD, then Hybrid Shared, and use your VAST project folder as the ultimate safety net.
+    # === EARLY EXIT: skip if already written ===
+    if blobfile.exists(workdir_fp):
+        logging.info(f"Memmap already exists at {workdir_fp}, skipping write.")
+        return workdir_fp
+
     fallback_tmp = posixpath.join(workdir, "tmp")
     base_tmp_dir = os.environ.get(
         "SHARED_SSD_TMPDIR", os.environ.get("SHARED_TMPDIR", fallback_tmp)
     )
     os.makedirs(base_tmp_dir, exist_ok=True)
-
     temp_fp = posixpath.join(base_tmp_dir, posixpath.split(workdir_fp)[-1])
-
     logging.info(f"Using temporary directory: {base_tmp_dir}")
 
-    # 2. Bypass cluster-wide file lock deadlocks on shared filesystems
+    # 2. Bypass cluster-wide file lock deadlocks
     class DummyFileLock:
-
         def __init__(self, *args, **kwargs):
             pass
 
@@ -289,7 +286,7 @@ def write_dataset_to_memmap(
 
     filelock.FileLock = DummyFileLock
 
-    # 3. Load dataset using the default cluster cache settings (so it finds your VAST cache)
+    # 3. Load dataset
     hfds_splits_set = set(hfds.get_dataset_split_names(hfds_identifier, hfds_config))
     if hfds_splits_set != {"train", "validation", "test"}:
         hfds_split = "train"
@@ -304,23 +301,18 @@ def write_dataset_to_memmap(
         streaming=False,
     )
 
-    # 4. Shard immediately so each node only processes its 1/8th slice
+    # 4. Shard immediately
     if n_shard > 1:
-        logging.info(f"Sharding dataset for Host {shard_id + 1}/{n_shard}...")
+        logging.info(f"Sharding dataset for shard {shard_id + 1}/{n_shard}...")
         ds = ds.shard(num_shards=n_shard, index=shard_id)
 
-    # 5. NOW redirect intermediate map caches to a high-capacity temporary path
-    # CHANGE 2: Create a cache directory dynamically based on your scratch space
+    # 5. Redirect map cache
     cache_dir = posixpath.join(base_tmp_dir, f"hf_cache_{shard_id}")
     os.makedirs(cache_dir, exist_ok=True)
     hfds.config.HF_DATASETS_CACHE = Path(cache_dir)
-
-    # === FIXED: PREVENT THREAD EXPLOSION ===
-    # Stops the 64 Rust tokenizers from spinning up 64 sub-threads each
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    # ====================================================================
 
-    # 6. Tokenize using all 64 CPU cores in parallel
+    # 6. Tokenize (cache hit: near-instant on re-runs)
     logging.info("Mapping tokenization function with 64 parallel processes...")
     remove_cols = (
         list(ds.column_names) if hasattr(ds, "column_names") else [hfds_datacol]
@@ -334,16 +326,15 @@ def write_dataset_to_memmap(
             max_length=sequence_len,
         )
 
-    # CHANGE 3: Removed cache_file_name. HF will automatically generate the 64 parallel cache files safely inside `cache_dir`
     ds = ds.map(
         processing_fn,
         batched=True,
         batch_size=hfds_buffer_size,
-        num_proc=64,  # Harness full machine capability
+        num_proc=64,
         remove_columns=remove_cols,
     )
 
-    # 7. Apply train/val/test splits safely along map cuts if non-standard
+    # 7. Apply train/val/test splits if non-standard
     if hfds_splits_set != {"train", "validation", "test"}:
         sharded_val_count = batch_size * 100
         if split_name == "validation":
@@ -353,38 +344,40 @@ def write_dataset_to_memmap(
         elif split_name == "train":
             ds = ds.select(range(2 * sharded_val_count, len(ds)))
 
-    # 8. Align batch bounds and write directly to the local binary file
+    # 8. Align batch bounds
     lcm = math.lcm(hfds_buffer_size, batch_size)
     writable_count = (len(ds) // lcm) * lcm
-
     n_shard_tokens = writable_count * sequence_len
     arr_dtype = get_arr_dtype(hftr_tokenizer.vocab_size)
-    arr = np.memmap(temp_fp, dtype=arr_dtype, mode="w+", shape=(n_shard_tokens,))
-
-    n_write_tokens_per_iter = hfds_buffer_size * sequence_len
     n_write_iters = writable_count // hfds_buffer_size
 
-    logging.info(f"Writing tokenized dataset to local node path {temp_fp}...")
+    arr = np.memmap(temp_fp, dtype=arr_dtype, mode="w+", shape=(n_shard_tokens,))
+
+    # 9. Write using ds.iter() for fast sequential arrow reads
+    logging.info(f"Writing tokenized dataset to {temp_fp}...")
     idx = 0
-    for i in tqdm.tqdm(range(n_write_iters), desc=f"Writing {temp_fp}"):
-        batch = ds[i * hfds_buffer_size : (i + 1) * hfds_buffer_size]["input_ids"]
-        arr_batch = np.array(batch, dtype=arr_dtype).reshape(-1)
-        arr[idx : idx + n_write_tokens_per_iter] = arr_batch
-        idx += n_write_tokens_per_iter
+    for batch in tqdm.tqdm(
+        ds.iter(batch_size=hfds_buffer_size),
+        total=n_write_iters,
+        desc=f"Writing {temp_fp}",
+    ):
+        arr_batch = np.array(batch["input_ids"], dtype=arr_dtype).reshape(-1)
+        actual_len = arr_batch.shape[0]
+        arr[idx : idx + actual_len] = arr_batch
+        idx += actual_len
+        if idx >= n_shard_tokens:
+            break
 
     arr.flush()
-    logging.info(f"Successfully finished writing local file {temp_fp}.")
+    logging.info(f"Successfully finished writing {temp_fp}.")
 
-    # 9. Copy local completed file back to shared cluster storage and clean up
-    logging.info(
-        f"Copying complete file {temp_fp} to permanent destination {workdir_fp}..."
-    )
+    # 10. Copy to permanent storage and clean up
+    logging.info(f"Copying {temp_fp} to {workdir_fp}...")
     blobfile.copy(temp_fp, workdir_fp, overwrite=True)
 
     if os.path.exists(temp_fp):
         os.remove(temp_fp)
 
-    # CHANGE 4: Clean up the dynamically assigned cache directory instead of hardcoded /tmp
     try:
         import shutil
 
