@@ -2,8 +2,8 @@
 #SBATCH --job-name=preprocessing
 #SBATCH -p standard96
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=64
-#SBATCH --output=model_preprocessing_%j_%t.log   # %t = task id, one log per shard
+#SBATCH --cpus-per-task=96
+#SBATCH --output=model_preprocessing_%j.log
 #SBATCH --time=24:00:00
 
 export HF_DATASETS_OFFLINE=1
