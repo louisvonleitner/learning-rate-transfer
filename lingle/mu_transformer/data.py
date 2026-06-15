@@ -307,10 +307,8 @@ def write_dataset_to_memmap(
         logging.info(f"Sharding dataset for shard {shard_id + 1}/{n_shard}...")
         ds = ds.shard(num_shards=n_shard, index=shard_id)
 
-    # 4b. Shuffle before selecting val/test/train + token-budget cap.
-    #     Fixed seed: reproducible split contents AND a stable .map() fingerprint
-    #     across retries (so the persistent tokenization cache still hits).
-    ds = ds.shuffle(seed=42)
+    # skipping shuffle as C4 is pre-shuffled
+    # ds = ds.shuffle(seed=42)
 
     # 5. Redirect map cache
     cache_dir = posixpath.join(base_tmp_dir, f"hf_cache_{shard_id}")
@@ -363,54 +361,6 @@ def write_dataset_to_memmap(
         lcm = math.lcm(hfds_buffer_size, batch_size)
     writable_count = (len(ds) // lcm) * lcm
     logging.info(f"writable_count: {writable_count}")
-    # # 4. Shard immediately
-    # if n_shard > 1:
-    #     logging.info(f"Sharding dataset for shard {shard_id + 1}/{n_shard}...")
-    #     ds = ds.shard(num_shards=n_shard, index=shard_id)
-
-    # # 5. Redirect map cache
-    # cache_dir = posixpath.join(base_tmp_dir, f"hf_cache_{shard_id}")
-    # os.makedirs(cache_dir, exist_ok=True)
-    # hfds.config.HF_DATASETS_CACHE = Path(cache_dir)
-    # os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-    # # 6. Tokenize (cache hit: near-instant on re-runs)
-    # logging.info("Mapping tokenization function with 64 parallel processes...")
-    # remove_cols = (
-    #     list(ds.column_names) if hasattr(ds, "column_names") else [hfds_datacol]
-    # )
-
-    # def processing_fn(examples):
-    #     return hftr_tokenizer(
-    #         examples[hfds_datacol],
-    #         padding="max_length",
-    #         truncation=True,
-    #         max_length=sequence_len,
-    #     )
-
-    # ds = ds.map(
-    #     processing_fn,
-    #     batched=True,
-    #     batch_size=hfds_buffer_size,
-    #     num_proc=64,
-    #     remove_columns=remove_cols,
-    # )
-
-    # # 7. Apply train/val/test splits if non-standard
-    # if hfds_splits_set != {"train", "validation", "test"}:
-    #     sharded_val_count = batch_size * 100
-    #     if split_name == "validation":
-    #         ds = ds.select(range(sharded_val_count))
-    #     elif split_name == "test":
-    #         ds = ds.select(range(sharded_val_count, 2 * sharded_val_count))
-    #     elif split_name == "train":
-    #         ds = ds.select(range(2 * sharded_val_count, len(ds)))
-
-    # # 8. Align batch bounds
-    # lcm = math.lcm(hfds_buffer_size, batch_size)
-    # writable_count = (len(ds) // lcm) * lcm
-    # n_shard_tokens = writable_count * sequence_len
-    # arr_dtype = get_arr_dtype(hftr_tokenizer.vocab_size)
 
     # 9. Write using Arrow slice reads — no Python-level iteration overhead.
     #    CHUNK_SIZE controls RAM usage: 5_000_000 rows * 1024 tokens * 2 bytes ≈ 50 GB.
@@ -421,6 +371,9 @@ def write_dataset_to_memmap(
         f"Writing tokenized dataset to {temp_fp} "
         f"({writable_count} rows, chunk size {CHUNK_SIZE})..."
     )
+
+    # get array_dtype
+    arr_dtype = get_arr_dtype(hftr_tokenizer.vocab_size)
     arr = np.memmap(temp_fp, dtype=arr_dtype, mode="w+", shape=(n_shard_tokens,))
 
     ds = ds.with_format("numpy", columns=["input_ids"])
