@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from datetime import datetime
+import itertools
 
 import os
 import sys
@@ -9,7 +10,7 @@ from absl import flags
 import jax
 
 # import Lingle adapted functions
-from mu_transformer.jax_impl.launch import main as third_party_main
+from mu_transformer.jax_impl.launch import main as lingle_main
 from mu_transformer.configs.Louis_base import get_config
 
 # 1. THE TRICK: Silently initialize ABSL flags with just the script name.
@@ -31,6 +32,7 @@ class TrainingRun:
 
         # get base config
         self.cfg = get_config()
+        # TODO: Integrate init variance!
 
         # model parameters
         self.d_model = d_model
@@ -312,28 +314,22 @@ class TrainingRun:
         ts_df = pd.DataFrame([self.training_loss_time_series])
         ts_df.to_csv(self.run_losses_df_path, index=False)
 
-    def launch_run(self):
+    def launch(self):
         """
         Launch training run via Lingle's implementation.
-        Parameters need to be set before!
         """
-        pass
 
-    def launch(self):
         print(f"Launching run with d_model={self.cfg.d_model}, lr={self.cfg.lr_base}")
 
         # Prevent JAX double-initialization crash during loops
-        if (
-            jax.process_index() == 0
-            and not jax.distributed.global_state.is_initialized()
-        ):
+        if jax.process_index() == 0 and not jax.distributed.is_initialized():
             try:
                 jax.distributed.initialize()
             except RuntimeError:
                 pass
 
         # launching Lingle model training
-        run_stats = third_party_main(None)
+        run_stats = lingle_main(None)
 
         # saving run state
         if run_stats is not None:
@@ -393,12 +389,40 @@ class HyperparameterGrid:
 
         return {"learning_rates": learning_rates, "init_variances": init_variances}
 
+    def launch_grid_search(self, d_model):
+        """
+        Launch grid search with self.sweep_variables
+        """
+        grid_dict = self.sweep_variables
+        if grid_dict == {}:
+            raise Exception(
+                "Grid for grid search is empty. Forgot to update_sweep_variables()?"
+            )
 
-if __name__ == "__main__":
-    # Example: A simple Pythonic loop for a grid search
-    learning_rates = [0.01, 0.005]
+        # extract hyperparameters
+        hyperparameters = grid_dict.keys()
+        values = grid_dict.values()
 
-    for lr in learning_rates:
-        runner = TrainingRun(d_model=128, base_lr=lr)
-        runner.launch()
-        runner.save_run_results()
+        # create grid with cartesian product - [{lr, init_var}, {lr, init_var}, ...]
+        grid = [dict(zip(keys, v)) for v in itertools.product(*values)]
+
+        # create TrainingRun instance
+        for combination in grid:
+            base_lr = combination["base_lr"]
+            base_init_var = combination["base_init_var"]
+            run = TrainingRun(
+                d_model=d_model,
+                base_lr=base_lr,
+                # workdir="TODO",
+                # n_training_tokens="TODO",
+            )
+
+
+# if __name__ == "__main__":
+#     # Example: A simple Pythonic loop for a grid search
+#     learning_rates = [0.01, 0.005]
+
+#     for lr in learning_rates:
+#         runner = TrainingRun(d_model=128, base_lr=lr)
+#         runner.launch()
+#         runner.save_run_results()
