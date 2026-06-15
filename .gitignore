@@ -1,0 +1,8 @@
+# ignore datasets
+*.csv
+*.npy
+# ignore log files
+*.log
+
+# conda env
+conda_lingle/
