@@ -5,4 +5,4 @@
 *.log
 
 # conda env
-conda_lingle/
+lingle/run_01/
