@@ -18,6 +18,7 @@ import re
 import sys
 import time
 from typing import Set
+from datetime import datetime
 
 import blobfile
 import flax
@@ -583,6 +584,11 @@ def train_loop():
     logging.info("Creating RNGs...")
     rng_init, _ = get_rngs()
 
+    # ===========================
+    # Added by Louis
+    loss_time_series = {}
+    # ===========================
+
     logging.info("Creating train state...")
     state = train_state_factory(rng_init)
     if not FLAGS.config.no_checkpoint:
@@ -719,11 +725,28 @@ def train_loop():
                 "tpuv3_mfu": get_tpuv3_mfu(metrics["param_count_total"], sec_per_step),
             }
             logging.info(essentials)
+
+            # =============================
+            # Added by Louis
+            # 2. ADDED: Capture the training loss at this step
+            if essentials["loss_avg"] is not None:
+                loss_time_series[int(step)] = float(essentials["loss_avg"])
+            # =============================
+
             if jax.process_index() == 0:
                 metrics.update(essentials)
                 wandb.log(metrics)
             start_time = end_time
             logging.debug("Done with print action...")
+
+    # =================================
+    # Added by Louis
+    return {
+        "loss_time_series": loss_time_series,
+        "best_loss": float(best_val_loss) if best_val_loss != float("inf") else None,
+        "final_loss": float(val_metrics.get("loss_avg", 0.0)),
+    }
+    # =================================
 
 
 @jax.jit
@@ -1049,6 +1072,14 @@ def save_eval_loss():
 def main(argv):
     del argv
     logging.info("=== Start of main() ===")
+
+    # 1. ADDED GUARD: Prevent crash during grid search loops
+    if jax.process_index() == 0 and not jax.distributed.is_initialized():
+        try:
+            jax.distributed.initialize()
+        except RuntimeError:
+            pass  # Already initialized
+
     logging.info(f"Python version: {sys.version.__repr__()}")
     jax.distributed.initialize()
     logging.info(f"JAX process: {jax.process_index()} / {jax.process_count()}")
@@ -1119,6 +1150,10 @@ def main(argv):
         )
 
     if FLAGS.mode == "train":
+        # =============================
+        # Added by Louis
+        run_start_time = datetime.now()
+        # =============================
         if FLAGS.config.is_sweep:
             done_fn = "done.txt"
             done_fp = posixpath.join(modeldir_factory("load", "checkpoints"), done_fn)
@@ -1131,8 +1166,21 @@ def main(argv):
                 os.mknod(local_done_fp)
                 blobfile.copy(local_done_fp, done_fp, overwrite=True)
                 os.remove(local_done_fp)
+        # This will always get triggered if I do is_sweep=false
         else:
-            train_loop()
+            # ==========================
+            # changed by Louis
+            training_stats = train_loop()  # capture output from the training loop
+            # ==========================
+
+        # 2. ADDED RETURN: Send the data back to your orchestrator
+        run_end_time = datetime.now()
+        run_wall_time = (run_end_time - run_start_time).total_seconds()
+        if stats is not None:
+            stats["training_wall_time"] = run_wall_time
+
+        return training_stats
+
     elif FLAGS.mode in {"validation", "test"}:
         eval_metrics = eval_loop(params=None, n_eval_step=None, mode=FLAGS.mode)
         eval_loss = eval_metrics["loss_avg"]
