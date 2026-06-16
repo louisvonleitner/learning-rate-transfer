@@ -374,6 +374,7 @@ def write_dataset_to_memmap(
 
     # get array_dtype
     arr_dtype = get_arr_dtype(hftr_tokenizer.vocab_size)
+    n_shard_tokens = writable_count * sequence_len
     arr = np.memmap(temp_fp, dtype=arr_dtype, mode="w+", shape=(n_shard_tokens,))
 
     ds = ds.with_format("numpy", columns=["input_ids"])
@@ -426,7 +427,12 @@ def read_dataset_to_memmap(
     force_download: bool,
 ) -> np.ndarray:
     workdir_fp = get_shard_fp(workdir, hfds_identifier, split_name, n_shard, shard_id)
-    temp_fp = posixpath.join("/tmp/", posixpath.split(workdir_fp)[-1])
+
+    # set temp file path to local job memory (can only allocate 50% of RAM per node)
+    fallback_tmp = posixpath.join(workdir, "tmp")
+    base_tmp_dir = os.environ.get("SHM_TMPDIR", fallback_tmp)
+    os.makedirs(base_tmp_dir, exist_ok=True)
+    temp_fp = posixpath.join(base_tmp_dir, posixpath.split(workdir_fp)[-1])
 
     if force_download or not blobfile.exists(temp_fp):
         logging.info(f"Copying {workdir_fp} to {temp_fp}")
