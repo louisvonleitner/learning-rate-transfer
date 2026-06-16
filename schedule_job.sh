@@ -2,7 +2,7 @@
 #SBATCH --job-name=jax_device_test
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
-#SBATCH -c 4
+#SBATCH -c 16
 #SBATCH --output=model_training_test_%j.log
 #SBATCH --constraint="inet"
 #SBATCH --mem=100G
