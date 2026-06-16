@@ -1073,15 +1073,17 @@ def main(argv):
     del argv
     logging.info("=== Start of main() ===")
 
-    # 1. ADDED GUARD: Prevent crash during grid search loops
-    if jax.process_index() == 0 and not jax.distributed.is_initialized():
-        try:
-            jax.distributed.initialize()
-        except RuntimeError:
-            pass  # Already initialized
+    # 1. GUARD: Safe initialization check for older JAX versions
+    try:
+        jax.distributed.initialize()
+    except RuntimeError:
+        logging.info("JAX distributed framework already initialized. Skipping.")
+    except AttributeError:
+        # Fallback if the cluster environment's JAX handles initialization uniquely
+        pass
 
     logging.info(f"Python version: {sys.version.__repr__()}")
-    jax.distributed.initialize()
+    # jax.distributed.initialize()
     logging.info(f"JAX process: {jax.process_index()} / {jax.process_count()}")
     logging.info("=== Flags: ===")
     logging.info(f"experiment_group: {FLAGS.experiment_group}")
@@ -1176,8 +1178,8 @@ def main(argv):
         # 2. ADDED RETURN: Send the data back to your orchestrator
         run_end_time = datetime.now()
         run_wall_time = (run_end_time - run_start_time).total_seconds()
-        if stats is not None:
-            stats["training_wall_time"] = run_wall_time
+        if training_stats is not None:
+            training_stats["training_wall_time"] = run_wall_time
 
         return training_stats
 

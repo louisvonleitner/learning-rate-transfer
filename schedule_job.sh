@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=jax_device_test
-#SBATCH -p grete:shared
-#SBATCH -G A100:1
+#SBATCH -p grete:interactive
+#SBATCH -G 1g.10gb:1
 #SBATCH -c 16
 #SBATCH --output=model_training_test_%j.log
 #SBATCH --constraint="inet"
-#SBATCH --mem=100G
+#SBATCH --mem=70G
 
 # Tells Hugging Face NOT to attempt any network requests
 export HF_DATASETS_OFFLINE=1
