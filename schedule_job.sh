@@ -5,6 +5,7 @@
 #SBATCH -c 4
 #SBATCH --output=model_training_test_%j.log
 #SBATCH --constraint="inet"
+#SBATCH --mem=100G
 
 # Tells Hugging Face NOT to attempt any network requests
 export HF_DATASETS_OFFLINE=1
