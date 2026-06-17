@@ -101,6 +101,7 @@ class TrainingRun:
         self.bias_lr = self.absolute_lrs["bias_lr"]
 
         # tracking model runs and results
+        self.workdir = workdir
         self.run_id = self.generate_run_id()
         self.base_folder_path = os.path.join(
             "/projects/extern/CIDAS/cidas_digitalisierung_lehre/bthesis_louis_vonleitner/dir.project/mutransfer/results"
@@ -136,7 +137,7 @@ class TrainingRun:
         # You must set every flag that `main()` explicitly calls in its logging/setup block.
         FLAGS.config = self.cfg
         FLAGS.mode = "train"
-        FLAGS.workdir = workdir
+        FLAGS.workdir = self.workdir
 
         # Mocking the remaining flags from the third-party main() snippet you provided
         FLAGS.experiment_group = "grid_search"
@@ -390,7 +391,7 @@ class HyperparameterGrid:
 
         return {"learning_rates": learning_rates, "init_variances": init_variances}
 
-    def launch_grid_search(self, d_model):
+    def launch_grid_search(self, d_model, n_trianing_tokens: int = None):
         """
         Launch grid search with self.sweep_variables
         """
@@ -414,8 +415,8 @@ class HyperparameterGrid:
             run = TrainingRun(
                 d_model=d_model,
                 base_lr=base_lr,
-                # workdir="TODO",
-                # n_training_tokens="TODO",
+                n_training_tokens=n_trianing_tokens,
+                # workdir: automatically set right
             )
 
 
