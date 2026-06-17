@@ -397,7 +397,7 @@ def modeldir_factory(option, suffix):
 
 def checkpoint_manager_factory(option):
     return ocp.CheckpointManager(
-        directory=modeldir_factory(option, "checkpoints"),
+        directory=os.path.abspath(modeldir_factory(option, "checkpoints")),
         checkpointers=ocp.Checkpointer(ocp.PyTreeCheckpointHandler()),
         options=ocp.CheckpointManagerOptions(
             create=True,
@@ -778,7 +778,7 @@ def eval_loop(params, ds_shard=None, n_eval_step=None, mode=None):
     logging.info("Creating dataset...")
     n_host = jax.process_count()
     host_id = jax.process_index()
-    n_shard = FLAGS.config.n_ds_shard
+    n_shard = FLAGS.config.n_ds_shard or n_host
     n_host_per_shard = n_host // n_shard  # n_ds_shard = n_host on smallest runs
     global_batch_size = global_batch_size_factory()
     batch_size_per_host = global_batch_size // n_host

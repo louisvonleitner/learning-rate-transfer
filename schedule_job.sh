@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=jax_device_test
-#SBATCH -p grete:interactive
-#SBATCH -G 1g.10gb:1
+#SBATCH --job-name=training_test
+#SBATCH -p grete:shared
+#SBATCH -G A100:1
 #SBATCH -c 16
 #SBATCH --output=model_training_test_%j.log
 #SBATCH --constraint="inet"
-#SBATCH --mem=70G
+#SBATCH --mem=90G
 
 # Tells Hugging Face NOT to attempt any network requests
 export HF_DATASETS_OFFLINE=1
@@ -51,13 +51,16 @@ if command -v nvidia-smi &> /dev/null; then
 fi
 echo "--------------------------------------------------"
 
+# adapt JAX memory allocation method
+export XLA_PYTHON_CLIENT_PREALLOCATE=false
+
 # --- 4. Execute the Target Script ---
 echo "Launching model training..."
 srun python mu_transformer/jax_impl/launch.py \
     --config=mu_transformer/configs/Louis_base.py \
     --mode=train \
     --workdir=./run_01 \
-    --config.tokens_per_global_batch=131072 \
+    --config.tokens_per_global_batch=65536 \
     --config.sequence_len=1024 \
     --config.n_mesh_rows=1 \
     --config.n_mesh_cols=1 \
@@ -66,7 +69,7 @@ srun python mu_transformer/jax_impl/launch.py \
     --config.hfds_identifier=allenai/c4 \
     --config.hfds_config=en \
     --config.hfds_datacol=text \
-    --wb_enabled=False \
+    --wb_enabled=True \
     --experiment_group="test"
 
 echo "Job completed successfully."
