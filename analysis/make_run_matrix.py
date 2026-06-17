@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 import itertools
-import functools as fcntl
+from filelock import FileLock
 
 import os
 import sys
@@ -305,12 +305,12 @@ class TrainingRun:
         results_df = pd.DataFrame([results_dict])
 
         # handle simultaneous accessing of file by locking it
-        with open(self.base_result_df_path, "a") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            header_mode = f.tell() == 0  # empty file means no header yet
-            # write with pd.to_csv
-            results_df.to_csv(f, index=False, mode="a", header=header_mode)
-            fcntl.flock(f, fcntl.LOCK_UN)
+        lock = FileLock(self.base_result_df_path + ".lock")
+        with lock:
+            with open(self.base_result_df_path, "a") as f:
+                header_mode = f.tell() == 0  # empty file means no header yet
+                # write with pd.to_csv
+                results_df.to_csv(f, index=False, mode="a", header=header_mode)
 
         print(
             f"Wrote results of run to global result csv. at {self.base_result_df_path}"
