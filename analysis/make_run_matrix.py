@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 import itertools
+import functools as fcntl
 
 import os
 import sys
