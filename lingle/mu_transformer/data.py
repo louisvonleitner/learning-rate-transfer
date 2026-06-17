@@ -342,13 +342,13 @@ def read_dataset_to_memmap(
     return arr
 
 
-def get_dataset(
+def get_datasets(
     hfds_identifier: str,
     hfds_config: str,
     hfds_datacol: str,
     hfds_buffer_size: int,
     hftr_tokenizer: hftr.PreTrainedTokenizerFast,
-    split_name: str,
+    # split_name: str,  # removed with new logic by Louis
     batch_size: int,  # batch size per host
     sequence_len: int,
     n_shard: int,
@@ -356,7 +356,7 @@ def get_dataset(
     workdir: str,
     force_download: bool,
 ) -> np.ndarray:
-    logging.info("Calling write_dataset_to_memmap...")
+    logging.info("For all datasets: write_datasets_to_memmap...")
     _ = write_datasets_to_memmap(
         hfds_identifier=hfds_identifier,
         hfds_config=hfds_config,
@@ -372,17 +372,38 @@ def get_dataset(
         # added by louis vvvvv
         max_tokens=26_600_000_000,
     )
-    logging.info("Calling read_dataset_to_memmap...")
-    arr = read_dataset_to_memmap(
+    logging.info("Calling read_dataset_to_memmap for all datasets...")
+    train_arr = read_dataset_to_memmap(
         hfds_identifier=hfds_identifier,
         hftr_tokenizer=hftr_tokenizer,
-        split_name=split_name,
+        split_name="train",
         n_shard=n_shard,
         shard_id=shard_id,
         workdir=workdir,
         force_download=force_download,
     )
-    return arr
+
+    val_arr = read_dataset_to_memmap(
+        hfds_identifier=hfds_identifier,
+        hftr_tokenizer=hftr_tokenizer,
+        split_name="validation",
+        n_shard=n_shard,
+        shard_id=shard_id,
+        workdir=workdir,
+        force_download=force_download,
+    )
+
+    test_arr = read_dataset_to_memmap(
+        hfds_identifier=hfds_identifier,
+        hftr_tokenizer=hftr_tokenizer,
+        split_name="test",
+        n_shard=n_shard,
+        shard_id=shard_id,
+        workdir=workdir,
+        force_download=force_download,
+    )
+
+    return train_arr, val_arr, test_arr
 
 
 def get_batch(

@@ -41,7 +41,7 @@ from ml_collections import config_flags
 
 from mu_transformer.data import count_batches
 from mu_transformer.data import get_batch
-from mu_transformer.data import get_dataset
+from mu_transformer.data import get_datasets
 from mu_transformer.data import get_tokenizer
 from mu_transformer.jax_impl.model import MESH_AXES
 from mu_transformer.jax_impl.model import Transformer
@@ -612,27 +612,14 @@ def train_loop():
     shard_id = host_id // n_host_per_shard
     subshard_id = host_id % n_host_per_shard
 
-    train_ds_shard = get_dataset(
+    # load train and val datasets
+    train_ds_shard, val_ds_shard, test_ds_shard = get_datasets(
         hfds_identifier=FLAGS.config.hfds_identifier,
         hfds_config=FLAGS.config.hfds_config,
         hfds_datacol=FLAGS.config.hfds_datacol,
         hfds_buffer_size=FLAGS.config.hfds_buffer_size,
         hftr_tokenizer=tokenizer_factory(),
-        split_name="train",
-        batch_size=batch_size_per_host,
-        sequence_len=FLAGS.config.sequence_len,
-        n_shard=n_shard,
-        shard_id=shard_id,
-        workdir=FLAGS.workdir,
-        force_download=FLAGS.config.force_download,
-    )
-    val_ds_shard = get_dataset(
-        hfds_identifier=FLAGS.config.hfds_identifier,
-        hfds_config=FLAGS.config.hfds_config,
-        hfds_datacol=FLAGS.config.hfds_datacol,
-        hfds_buffer_size=FLAGS.config.hfds_buffer_size,
-        hftr_tokenizer=tokenizer_factory(),
-        split_name="validation",
+        # split_name="train",
         batch_size=batch_size_per_host,
         sequence_len=FLAGS.config.sequence_len,
         n_shard=n_shard,
@@ -785,13 +772,12 @@ def eval_loop(params, ds_shard=None, n_eval_step=None, mode=None):
     shard_id = host_id // n_host_per_shard
     subshard_id = host_id % n_host_per_shard
     if ds_shard is None:
-        ds_shard = get_dataset(
+        train_ds_shard, val_ds_shard, test_ds_shard = get_datasets(
             hfds_identifier=FLAGS.config.hfds_identifier,
             hfds_config=FLAGS.config.hfds_config,
             hfds_datacol=FLAGS.config.hfds_datacol,
             hfds_buffer_size=FLAGS.config.hfds_buffer_size,
             hftr_tokenizer=tokenizer_factory(),
-            split_name=mode,
             batch_size=batch_size_per_host,
             sequence_len=FLAGS.config.sequence_len,
             n_shard=n_shard,
@@ -799,6 +785,14 @@ def eval_loop(params, ds_shard=None, n_eval_step=None, mode=None):
             workdir=FLAGS.workdir,
             force_download=FLAGS.config.force_download,
         )
+        # extract the datset to use
+        if mode == "train":
+            ds_shard = train_ds_shard
+        elif mode == "validation":
+            ds_shard = val_ds_shard
+        elif mode == "test":
+            ds_shard = test_ds_shard
+
     n_batch_per_subshard = count_batches(
         shard=ds_shard,
         n_subshard=n_host_per_shard,
@@ -970,13 +964,14 @@ def sampling_loop():
     batch_size_per_host = global_batch_size // n_host
     shard_id = host_id // n_host_per_shard
     subshard_id = host_id % n_host_per_shard
-    ds_shard = get_dataset(
+    # ==================================
+    # Adapted by Louis
+    train_ds_shard, val_ds_shard, test_ds_shard = get_datasets(
         hfds_identifier=FLAGS.config.hfds_identifier,
         hfds_config=FLAGS.config.hfds_config,
         hfds_datacol=FLAGS.config.hfds_datacol,
         hfds_buffer_size=FLAGS.config.hfds_buffer_size,
         hftr_tokenizer=tokenizer,
-        split_name="validation",
         batch_size=batch_size_per_host,
         sequence_len=FLAGS.config.sequence_len,
         n_shard=n_shard,
@@ -984,6 +979,8 @@ def sampling_loop():
         workdir=FLAGS.workdir,
         force_download=FLAGS.config.force_download,
     )
+    ds_shard = val_ds_shard
+    # ==================================
     batch = get_batch(
         shard=ds_shard,
         n_subshard=n_host_per_shard,
