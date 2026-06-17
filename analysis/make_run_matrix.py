@@ -246,83 +246,86 @@ class TrainingRun:
         """
         # Add stats to global run csv
         # ===================================
-        # determine what variables to save
-        if variables_to_save is None:
-            variables_to_save = [
-                "d_model",
-                "model_depth",
-                "head_dimension",
-                "n_heads",
-                "d_ffn",
-                "vocab_size",
-                "n_params_embedding",
-                "n_params_encoder",
-                "n_params_decoder",
-                "n_params_mha",
-                "n_params_rms_norm",
-                "n_params_ffn",
-                "n_params_transformer_block",
-                "n_parameters",
-                "base_lr",
-                "max_lr",
-                "lr_schedule_name",
-                "optim_name",
-                "optim_beta1",
-                "optim_beta2",
-                "optim_eps",
-                "weight_decay",
-                "n_training_tokens",
-                "tokens_per_global_batch",
-                "batch_size",
-                "sequence_len",
-                "n_pretrain_steps",
-                "n_warmup_steps",
-                "embedding_matrix_lr",
-                "attention_weight_matrix_lr",
-                "attention_bias_lr",
-                "w_ffn_in_lr",
-                "w_ffn_out_lr",
-                "bias_lr",
-                "unembedding_matrix_lr",
-                "run_id",
-                "run_folder_path",
-                "run_losses_df_path",
-                "final_loss",
-                "best_loss",
-                "training_wall_time",
-            ]
-        # variables_to_save is not None
-        else:
-            assert type(variables_to_save) == list
+        if self.training_loss_time_series is not None:
+            # determine what variables to save
+            if variables_to_save is None:
+                variables_to_save = [
+                    "d_model",
+                    "model_depth",
+                    "head_dimension",
+                    "n_heads",
+                    "d_ffn",
+                    "vocab_size",
+                    "n_params_embedding",
+                    "n_params_encoder",
+                    "n_params_decoder",
+                    "n_params_mha",
+                    "n_params_rms_norm",
+                    "n_params_ffn",
+                    "n_params_transformer_block",
+                    "n_parameters",
+                    "base_lr",
+                    "max_lr",
+                    "lr_schedule_name",
+                    "optim_name",
+                    "optim_beta1",
+                    "optim_beta2",
+                    "optim_eps",
+                    "weight_decay",
+                    "n_training_tokens",
+                    "tokens_per_global_batch",
+                    "batch_size",
+                    "sequence_len",
+                    "n_pretrain_steps",
+                    "n_warmup_steps",
+                    "embedding_matrix_lr",
+                    "attention_weight_matrix_lr",
+                    "attention_bias_lr",
+                    "w_ffn_in_lr",
+                    "w_ffn_out_lr",
+                    "bias_lr",
+                    "unembedding_matrix_lr",
+                    "run_id",
+                    "run_folder_path",
+                    "run_losses_df_path",
+                    "final_loss",
+                    "best_loss",
+                    "training_wall_time",
+                ]
+            # variables_to_save is not None
+            else:
+                assert type(variables_to_save) == list
 
-        # fetch values and save
-        print("Writing results of run to global result csv.")
-        os.makedirs(self.base_folder_path, exist_ok=True)
+            # fetch values and save
+            print("Writing results of run to global result csv.")
+            os.makedirs(self.base_folder_path, exist_ok=True)
 
-        results_dict = {
-            variable: getattr(self, variable) for variable in variables_to_save
-        }
-        results_df = pd.DataFrame([results_dict])
+            results_dict = {
+                variable: getattr(self, variable) for variable in variables_to_save
+            }
+            results_df = pd.DataFrame([results_dict])
 
-        # handle simultaneous accessing of file by locking it
-        lock = FileLock(self.base_result_df_path + ".lock")
-        with lock:
-            with open(self.base_result_df_path, "a") as f:
-                header_mode = f.tell() == 0  # empty file means no header yet
-                # write with pd.to_csv
-                results_df.to_csv(f, index=False, mode="a", header=header_mode)
+            # handle simultaneous accessing of file by locking it
+            lock = FileLock(self.base_result_df_path + ".lock")
+            with lock:
+                with open(self.base_result_df_path, "a") as f:
+                    header_mode = f.tell() == 0  # empty file means no header yet
+                    # write with pd.to_csv
+                    results_df.to_csv(f, index=False, mode="a", header=header_mode)
 
-        print(
-            f"Wrote results of run to global result csv. at {self.base_result_df_path}"
-        )
+            print(
+                f"Wrote results of run to global result csv. at {self.base_result_df_path}"
+            )
 
-        # Write loss time series to csv
-        # ===================================
-        assert type(self.training_loss_time_series) == dict
-        os.makedirs(self.run_folder_path, exist_ok=True)
-        ts_df = pd.DataFrame([self.training_loss_time_series])
-        ts_df.to_csv(self.run_losses_df_path, index=False)
-        print(f"Wrote loss time series to csv. at {self.run_losses_df_path}")
+            # Write loss time series to csv
+            # ===================================
+            assert (
+                type(self.training_loss_time_series) == dict
+            ) or self.training_loss_time_series is None
+            os.makedirs(self.run_folder_path, exist_ok=True)
+            ts_df = pd.DataFrame([self.training_loss_time_series])
+            ts_df.to_csv(self.run_losses_df_path, index=False)
+            print(f"Wrote loss time series to csv. at {self.run_losses_df_path}")
 
     def launch(self):
         """
