@@ -102,12 +102,16 @@ class TrainingRun:
 
         # tracking model runs and results
         self.run_id = self.generate_run_id()
-        self.base_folder_path = os.path.join("mutransfer/results")
+        self.base_folder_path = os.path.join(
+            "/projects/extern/CIDAS/cidas_digitalisierung_lehre/bthesis_louis_vonleitner/dir.project/mutransfer/results"
+        )
         self.base_result_df_path = os.path.join(
             self.base_folder_path, "run_results.csv"
         )
         self.run_folder_path = os.path.join(self.base_folder_path, self.run_id)
         self.run_losses_df_path = os.path.join(self.run_folder_path, "losses.csv")
+        os.makedirs(self.base_folder_path, exist_ok=True)
+        os.makedirs(self.run_folder_path, exist_ok=True)
 
         # predicting run time
         self.determine_theoretical_flops_and_walltime()
