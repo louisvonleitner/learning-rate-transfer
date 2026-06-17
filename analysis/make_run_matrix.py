@@ -66,6 +66,10 @@ class TrainingRun:
         self.optim_eps = self.cfg.optim_eps
         self.weight_decay = self.cfg.wd
 
+        # initialization variance parameters
+        self.init_stddev = init_std_dev
+        self.absolute_init_stddev = self.init_stddev * self.d_model**-0.5
+
         # Chinchilla is used if n_training_tokens == None
         if n_training_tokens == None:
             self.n_training_tokens = (
@@ -128,6 +132,8 @@ class TrainingRun:
         # ===================================================================
         self.cfg.d_model = self.d_model
         self.cfg.lr_base = self.base_lr
+        self.cfg.init_stddev = self.init_stddev
+        self.cfg.absolute_init_stddev = self.absolute_init_stddev
         self.cfg.n_layer = self.model_depth
         self.cfg.d_head = self.head_dimension
         self.cfg.n_pretrain_steps = self.n_pretrain_steps
