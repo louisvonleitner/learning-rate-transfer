@@ -62,7 +62,7 @@ def get_base_config():
 
     # optimization
     config.tokens_per_global_batch = (
-        256 * config.sequence_len  # batch size of 256 kept constant
+        64 * config.sequence_len  # batch size of 256 kept constant
     )  # batch size * sequence len
     config.grad_acc_steps = 1  # steps per parameter update (for micro-batching)
     config.grad_clip = 1.0  # grad clip max l2 norm
