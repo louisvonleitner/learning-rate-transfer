@@ -264,7 +264,7 @@ class TrainingRun:
                 "optim_eps",
                 "weight_decay",
                 "n_training_tokens",
-                "training_tokens_per_global_batch",
+                "tokens_per_global_batch",
                 "batch_size",
                 "sequence_len",
                 "n_pretrain_steps",
