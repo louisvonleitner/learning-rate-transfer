@@ -41,6 +41,7 @@ class TransformerConfig:
     d_head: int
     ff_multiple: int
     e_norm: bool
+    init_stddev: float
     q_init: str
     r_init: str
     u_init: str
