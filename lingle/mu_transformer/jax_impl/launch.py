@@ -654,15 +654,18 @@ def train_loop():
         # occasionally perform an evaluation and save a checkpoint on improvement
         if (step % FLAGS.config.n_save_step == 0) or step == n_total_step:
             state = jax.block_until_ready(state)
+            # ===================================
+            # removed by Louis
             # stop profiler
-            if jax.process_index() == 0 and step == 2 * FLAGS.config.n_save_step:
-                logging.info("Stopping profiler trace...")
-                try:
-                    jax.profiler.stop_trace()
-                except RuntimeError as e:
-                    # we ignore an error that occurs if restoring at step = 2 * n_save
-                    if e.args[0] != "No profile started":
-                        raise RuntimeError(e)
+            # if jax.process_index() == 0 and step == 2 * FLAGS.config.n_save_step:
+            #     logging.info("Stopping profiler trace...")
+            #     try:
+            #         jax.profiler.stop_trace()
+            #     except RuntimeError as e:
+            #         # we ignore an error that occurs if restoring at step = 2 * n_save
+            #         if e.args[0] != "No profile started":
+            #             raise RuntimeError(e)
+            # ===================================
             logging.debug("Starting evaluation action...")
             val_metrics = eval_loop(
                 state.params,
@@ -674,6 +677,8 @@ def train_loop():
                 if not FLAGS.config.no_checkpoint:
                     do_save(save_checkpoint_mgr, step, state)
                 best_val_loss = val_metrics["loss_avg"]
+            # ===================================
+            # Removed by Louis
             # start profiler
             if jax.process_index() == 0 and step == FLAGS.config.n_save_step:
                 assert FLAGS.config.n_save_step > FLAGS.config.n_print_step
@@ -682,6 +687,7 @@ def train_loop():
                     log_dir=modeldir_factory("save", "logging"),
                     # create_perfetto_trace=True,  # write extra trace file for perfetto
                 )
+            # ===================================
             logging.debug("Done with evaluation action...")
 
         # do the training step
@@ -1073,7 +1079,7 @@ def main(argv):
     del argv
     logging.info("=== Start of main() ===")
 
-    # 1. GUARD: Safe initialization check for older JAX versions
+    # GUARD: Safe initialization check for older JAX versions
     try:
         jax.distributed.initialize()
     except RuntimeError:
@@ -1138,8 +1144,11 @@ def main(argv):
 
     logging.info("Creating W&B connection...")
     if jax.process_index() == 0:
+        # ====================================
+        # Louis changed wandb settings
         wandb.init(
-            project="mu_transformer_experimental_improvements",
+            entity="louis-vonleitner-georg-august-univeristy-goettingen",
+            project="mu_transfer",
             group=FLAGS.experiment_group,
             config={
                 **vars(FLAGS.config)["_fields"],
@@ -1150,6 +1159,7 @@ def main(argv):
             mode="online" if FLAGS.wb_enabled else "disabled",
             id=FLAGS.wb_run,
         )
+        # ====================================
 
     if FLAGS.mode == "train":
         # =============================

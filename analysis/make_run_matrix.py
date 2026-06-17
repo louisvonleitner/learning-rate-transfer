@@ -13,12 +13,6 @@ import jax
 from mu_transformer.jax_impl.launch import main as lingle_main
 from mu_transformer.configs.Louis_base import get_config
 
-# 1. THE TRICK: Silently initialize ABSL flags with just the script name.
-# This prevents the "UnparsedFlagAccessError" without actually requiring CLI inputs.
-FLAGS = flags.FLAGS
-if not FLAGS.is_parsed():
-    FLAGS(sys.argv[:1])
-
 
 class TrainingRun:
 
@@ -26,7 +20,7 @@ class TrainingRun:
         self,
         d_model: int,
         base_lr: float,
-        workdir: str = "./test_run",
+        workdir: str = "/mnt/vast-nhr/projects/bthesis_louis_vonleitner/mutransfer/lingle/run_01",
         n_training_tokens=None,
     ):
 
@@ -80,10 +74,11 @@ class TrainingRun:
         else:
             self.n_training_tokens = n_training_tokens
 
+        # batch and sequence length
         self.tokens_per_global_batch = self.cfg.tokens_per_global_batch
-        self.batch_size = 256
         self.sequence_len = self.cfg.sequence_len
-        assert self.batch_size * self.sequence_len == self.tokens_per_global_batch
+        assert self.tokens_per_global_batch % self.sequence_len == 0
+        self.batch_size = self.tokens_per_global_batch / self.sequence_len
         self.n_pretrain_steps = np.ceil(
             self.n_training_tokens / self.tokens_per_global_batch
         )
@@ -321,12 +316,14 @@ class TrainingRun:
 
         print(f"Launching run with d_model={self.cfg.d_model}, lr={self.cfg.lr_base}")
 
-        # Prevent JAX double-initialization crash during loops
-        if jax.process_index() == 0 and not jax.distributed.is_initialized():
-            try:
-                jax.distributed.initialize()
-            except RuntimeError:
-                pass
+        # Safe initialization check for older JAX versions
+        try:
+            jax.distributed.initialize()
+        except RuntimeError:
+            logging.info("JAX distributed framework already initialized. Skipping.")
+        except AttributeError:
+            # Fallback if the cluster environment's JAX handles initialization uniquely
+            pass
 
         # launching Lingle model training
         run_stats = lingle_main(None)
@@ -418,11 +415,15 @@ class HyperparameterGrid:
             )
 
 
-# if __name__ == "__main__":
-#     # Example: A simple Pythonic loop for a grid search
-#     learning_rates = [0.01, 0.005]
+# Parse the CLI arguments if they haven't been parsed yet.
+FLAGS = flags.FLAGS
+if not FLAGS.is_parsed():
+    FLAGS(sys.argv)
 
-#     for lr in learning_rates:
-#         runner = TrainingRun(d_model=128, base_lr=lr)
-#         runner.launch()
-#         runner.save_run_results()
+if __name__ == "__main__":
+    # Example: A simple Pythonic loop for a grid search
+    lr = 0.01
+
+    runner = TrainingRun(d_model=128, base_lr=lr)
+    runner.launch()
+    runner.save_run_results()

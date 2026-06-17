@@ -4,5 +4,7 @@
 # ignore log files
 *.log
 
-# conda env
+# run logs
 lingle/run_01/
+lingle/wandb/
+wandb/
