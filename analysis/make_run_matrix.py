@@ -428,6 +428,6 @@ if __name__ == "__main__":
     # Example: A simple Pythonic loop for a grid search
     lr = 0.01
 
-    runner = TrainingRun(d_model=128, base_lr=lr)
+    runner = TrainingRun(d_model=1024, base_lr=lr, n_training_tokens=163_840_000)
     runner.launch()
     runner.save_run_results()
