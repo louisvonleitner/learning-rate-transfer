@@ -312,7 +312,9 @@ class TrainingRun:
             results_df.to_csv(f, index=False, mode="a", header=header_mode)
             fcntl.flock(f, fcntl.LOCK_UN)
 
-        print("Wrote results of run to global result csv.")
+        print(
+            f"Wrote results of run to global result csv. at {self.base_result_df_path}"
+        )
 
         # Write loss time series to csv
         # ===================================
@@ -320,6 +322,7 @@ class TrainingRun:
         os.makedirs(self.run_folder_path, exist_ok=True)
         ts_df = pd.DataFrame([self.training_loss_time_series])
         ts_df.to_csv(self.run_losses_df_path, index=False)
+        print(f"Wrote loss time series to csv. at {self.run_losses_df_path}")
 
     def launch(self):
         """
