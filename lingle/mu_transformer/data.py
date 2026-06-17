@@ -349,6 +349,7 @@ def get_datasets(
     hfds_buffer_size: int,
     hftr_tokenizer: hftr.PreTrainedTokenizerFast,
     # split_name: str,  # removed with new logic by Louis
+    mode: str,
     batch_size: int,  # batch size per host
     sequence_len: int,
     n_shard: int,
@@ -363,7 +364,8 @@ def get_datasets(
         hfds_datacol=hfds_datacol,
         hfds_buffer_size=hfds_buffer_size,
         hftr_tokenizer=hftr_tokenizer,
-        split_name=split_name,
+        # removed by louis vvvv
+        # split_name=split_name,
         batch_size=batch_size,
         sequence_len=sequence_len,
         n_shard=n_shard,
@@ -373,35 +375,48 @@ def get_datasets(
         max_tokens=26_600_000_000,
     )
     logging.info("Calling read_dataset_to_memmap for all datasets...")
-    train_arr = read_dataset_to_memmap(
-        hfds_identifier=hfds_identifier,
-        hftr_tokenizer=hftr_tokenizer,
-        split_name="train",
-        n_shard=n_shard,
-        shard_id=shard_id,
-        workdir=workdir,
-        force_download=force_download,
-    )
+    if mode == "train" or mode == "validation":
+        if mode == "train":
+            train_arr = read_dataset_to_memmap(
+                hfds_identifier=hfds_identifier,
+                hftr_tokenizer=hftr_tokenizer,
+                split_name="train",
+                n_shard=n_shard,
+                shard_id=shard_id,
+                workdir=workdir,
+                force_download=force_download,
+            )
+        # mode == "validation"
+        else:
+            train_arr = None
 
-    val_arr = read_dataset_to_memmap(
-        hfds_identifier=hfds_identifier,
-        hftr_tokenizer=hftr_tokenizer,
-        split_name="validation",
-        n_shard=n_shard,
-        shard_id=shard_id,
-        workdir=workdir,
-        force_download=force_download,
-    )
+        val_arr = read_dataset_to_memmap(
+            hfds_identifier=hfds_identifier,
+            hftr_tokenizer=hftr_tokenizer,
+            split_name="validation",
+            n_shard=n_shard,
+            shard_id=shard_id,
+            workdir=workdir,
+            force_download=force_download,
+        )
+        test_arr = None
 
-    test_arr = read_dataset_to_memmap(
-        hfds_identifier=hfds_identifier,
-        hftr_tokenizer=hftr_tokenizer,
-        split_name="test",
-        n_shard=n_shard,
-        shard_id=shard_id,
-        workdir=workdir,
-        force_download=force_download,
-    )
+    elif mode == "test":
+        train_arr = None
+        val_arr = None
+        test_arr = read_dataset_to_memmap(
+            hfds_identifier=hfds_identifier,
+            hftr_tokenizer=hftr_tokenizer,
+            split_name="test",
+            n_shard=n_shard,
+            shard_id=shard_id,
+            workdir=workdir,
+            force_download=force_download,
+        )
+    else:
+        raise Exception(
+            f"Mode '{mode}' is not allowed. [train, validation, test] are valid modes."
+        )
 
     return train_arr, val_arr, test_arr
 

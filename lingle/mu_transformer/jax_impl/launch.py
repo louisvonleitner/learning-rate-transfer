@@ -619,6 +619,8 @@ def train_loop():
         hfds_datacol=FLAGS.config.hfds_datacol,
         hfds_buffer_size=FLAGS.config.hfds_buffer_size,
         hftr_tokenizer=tokenizer_factory(),
+        # vvvv changed by louis
+        mode="train",
         # split_name="train",
         batch_size=batch_size_per_host,
         sequence_len=FLAGS.config.sequence_len,
@@ -778,6 +780,8 @@ def eval_loop(params, ds_shard=None, n_eval_step=None, mode=None):
             hfds_datacol=FLAGS.config.hfds_datacol,
             hfds_buffer_size=FLAGS.config.hfds_buffer_size,
             hftr_tokenizer=tokenizer_factory(),
+            # vvvv changed by Louis
+            mode=mode,
             batch_size=batch_size_per_host,
             sequence_len=FLAGS.config.sequence_len,
             n_shard=n_shard,
@@ -972,6 +976,7 @@ def sampling_loop():
         hfds_datacol=FLAGS.config.hfds_datacol,
         hfds_buffer_size=FLAGS.config.hfds_buffer_size,
         hftr_tokenizer=tokenizer,
+        mode="validation",
         batch_size=batch_size_per_host,
         sequence_len=FLAGS.config.sequence_len,
         n_shard=n_shard,
