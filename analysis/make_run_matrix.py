@@ -21,13 +21,13 @@ class TrainingRun:
         self,
         d_model: int,
         base_lr: float,
+        init_stddev: float,
         workdir: str = "/mnt/vast-nhr/projects/bthesis_louis_vonleitner/mutransfer/lingle/run_01",
         n_training_tokens=None,
     ):
 
         # get base config
         self.cfg = get_config()
-        # TODO: Integrate init variance!
 
         # model parameters
         self.d_model = d_model
@@ -67,7 +67,7 @@ class TrainingRun:
         self.weight_decay = self.cfg.wd
 
         # initialization variance parameters
-        self.init_stddev = init_std_dev
+        self.init_stddev = init_stddev
         self.absolute_init_stddev = self.init_stddev * self.d_model**-0.5
 
         # Chinchilla is used if n_training_tokens == None
@@ -361,7 +361,7 @@ class HyperparameterGrid:
         # sweep variables
         if grid_with_results is None:
             self.base_learning_rates = []
-            self.base_init_variances = []
+            self.base_init_stddevs = []
 
             self.update_sweep_variables()
 
@@ -373,7 +373,7 @@ class HyperparameterGrid:
     def update_sweep_variables(variables: list = None):
         self.potential_sweep_variables = {
             "base_lr": self.base_learning_rates,
-            "base_init_var": self.base_init_variances,
+            "base_init_stddev": self.base_init_stddevs,
         }
         self.sweep_variables = self.potential_sweep_variables[variables]
 
@@ -394,7 +394,7 @@ class HyperparameterGrid:
         )
 
         self.base_learning_rates = learning_rates
-        self.base_init_variances = init_variances
+        self.base_init_stddevs = init_stddevs
 
         return {"learning_rates": learning_rates, "init_variances": init_variances}
 
@@ -418,10 +418,11 @@ class HyperparameterGrid:
         # create TrainingRun instance
         for combination in grid:
             base_lr = combination["base_lr"]
-            base_init_var = combination["base_init_var"]
+            base_init_stddev = combination["base_init_stddev"]
             run = TrainingRun(
                 d_model=d_model,
                 base_lr=base_lr,
+                init_stddev=base_init_stddev,
                 n_training_tokens=n_trianing_tokens,
                 # workdir: automatically set right
             )
