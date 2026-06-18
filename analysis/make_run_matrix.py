@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 import itertools
+from filelock import FileLock
 
 import os
 import sys
@@ -20,13 +21,13 @@ class TrainingRun:
         self,
         d_model: int,
         base_lr: float,
+        init_stddev: float,
         workdir: str = "/mnt/vast-nhr/projects/bthesis_louis_vonleitner/mutransfer/lingle/run_01",
         n_training_tokens=None,
     ):
 
         # get base config
         self.cfg = get_config()
-        # TODO: Integrate init variance!
 
         # model parameters
         self.d_model = d_model
@@ -65,6 +66,10 @@ class TrainingRun:
         self.optim_eps = self.cfg.optim_eps
         self.weight_decay = self.cfg.wd
 
+        # initialization variance parameters
+        self.init_stddev = init_stddev
+        self.absolute_init_stddev = self.init_stddev * self.d_model**-0.5
+
         # Chinchilla is used if n_training_tokens == None
         if n_training_tokens == None:
             self.n_training_tokens = (
@@ -101,6 +106,7 @@ class TrainingRun:
         self.bias_lr = self.absolute_lrs["bias_lr"]
 
         # tracking model runs and results
+        self.workdir = workdir
         self.run_id = self.generate_run_id()
         self.base_folder_path = os.path.join(
             "/projects/extern/CIDAS/cidas_digitalisierung_lehre/bthesis_louis_vonleitner/dir.project/mutransfer/results"
@@ -126,6 +132,8 @@ class TrainingRun:
         # ===================================================================
         self.cfg.d_model = self.d_model
         self.cfg.lr_base = self.base_lr
+        self.cfg.init_stddev = self.init_stddev
+        self.cfg.absolute_init_stddev = self.absolute_init_stddev
         self.cfg.n_layer = self.model_depth
         self.cfg.d_head = self.head_dimension
         self.cfg.n_pretrain_steps = self.n_pretrain_steps
@@ -136,7 +144,7 @@ class TrainingRun:
         # You must set every flag that `main()` explicitly calls in its logging/setup block.
         FLAGS.config = self.cfg
         FLAGS.mode = "train"
-        FLAGS.workdir = workdir
+        FLAGS.workdir = self.workdir
 
         # Mocking the remaining flags from the third-party main() snippet you provided
         FLAGS.experiment_group = "grid_search"
@@ -238,80 +246,86 @@ class TrainingRun:
         """
         # Add stats to global run csv
         # ===================================
-        # determine what variables to save
-        if variables_to_save is None:
-            variables_to_save = [
-                "d_model",
-                "model_depth",
-                "head_dimension",
-                "n_heads",
-                "d_ffn",
-                "vocab_size",
-                "n_params_embedding",
-                "n_params_encoder",
-                "n_params_decoder",
-                "n_params_mha",
-                "n_params_rms_norm",
-                "n_params_ffn",
-                "n_params_transformer_block",
-                "n_parameters",
-                "base_lr",
-                "max_lr",
-                "lr_schedule_name",
-                "optim_name",
-                "optim_beta1",
-                "optim_beta2",
-                "optim_eps",
-                "weight_decay",
-                "n_training_tokens",
-                "training_tokens_per_global_batch",
-                "batch_size",
-                "sequence_len",
-                "n_pretrain_steps",
-                "n_warmup_steps",
-                "embedding_matrix_lr",
-                "attention_weight_matrix_lr",
-                "attention_bias_lr",
-                "w_ffn_in_lr",
-                "w_ffn_out_lr",
-                "bias_lr",
-                "unembedding_matrix_lr",
-                "run_id",
-                "run_folder_path",
-                "run_losses_df_path",
-                "final_loss",
-                "best_loss",
-                "training_wall_time",
-            ]
-        # variables_to_save is not None
-        else:
-            assert type(variables_to_save) == list
+        if self.training_loss_time_series is not None:
+            # determine what variables to save
+            if variables_to_save is None:
+                variables_to_save = [
+                    "d_model",
+                    "model_depth",
+                    "head_dimension",
+                    "n_heads",
+                    "d_ffn",
+                    "vocab_size",
+                    "n_params_embedding",
+                    "n_params_encoder",
+                    "n_params_decoder",
+                    "n_params_mha",
+                    "n_params_rms_norm",
+                    "n_params_ffn",
+                    "n_params_transformer_block",
+                    "n_parameters",
+                    "base_lr",
+                    "max_lr",
+                    "lr_schedule_name",
+                    "optim_name",
+                    "optim_beta1",
+                    "optim_beta2",
+                    "optim_eps",
+                    "weight_decay",
+                    "n_training_tokens",
+                    "tokens_per_global_batch",
+                    "batch_size",
+                    "sequence_len",
+                    "n_pretrain_steps",
+                    "n_warmup_steps",
+                    "embedding_matrix_lr",
+                    "attention_weight_matrix_lr",
+                    "attention_bias_lr",
+                    "w_ffn_in_lr",
+                    "w_ffn_out_lr",
+                    "bias_lr",
+                    "unembedding_matrix_lr",
+                    "run_id",
+                    "run_folder_path",
+                    "run_losses_df_path",
+                    "final_loss",
+                    "best_loss",
+                    "training_wall_time",
+                ]
+            # variables_to_save is not None
+            else:
+                assert type(variables_to_save) == list
 
-        # fetch values and save
-        print("Writing results of run to global result csv.")
-        os.makedirs(self.base_folder_path, exist_ok=True)
+            # fetch values and save
+            print("Writing results of run to global result csv.")
+            os.makedirs(self.base_folder_path, exist_ok=True)
 
-        results_dict = {
-            variable: getattr(self, variable) for variable in variables_to_save
-        }
-        results_df = pd.DataFrame([results_dict])
+            results_dict = {
+                variable: getattr(self, variable) for variable in variables_to_save
+            }
+            results_df = pd.DataFrame([results_dict])
 
-        # handle simultaneous accessing of file by locking it
-        with open(self.base_result_df_path, "a") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            header_mode = f.tell() == 0  # empty file means no header yet
-            # write with pd.to_csv
-            results_df.to_csv(f, index=False, mode="a", header=header_mode)
-            fcntl.flock(f, fcntl.LOCK_UN)
+            # handle simultaneous accessing of file by locking it
+            lock = FileLock(self.base_result_df_path + ".lock")
+            with lock:
+                with open(self.base_result_df_path, "a") as f:
+                    header_mode = f.tell() == 0  # empty file means no header yet
+                    # write with pd.to_csv
+                    results_df.to_csv(f, index=False, mode="a", header=header_mode)
 
-        print("Wrote results of run to global result csv.")
+            print(
+                f"Wrote results of run to global result csv. at {self.base_result_df_path}"
+            )
 
-        # Write loss time series to csv
-        # ===================================
-        assert type(self.training_loss_time_series) == dict
-        os.makedirs(self.run_folder_path, exist_ok=True)
-        ts_df = pd.DataFrame([self.training_loss_time_series])
-        ts_df.to_csv(self.run_losses_df_path, index=False)
+            # Write loss time series to csv
+            # ===================================
+            assert (
+                type(self.training_loss_time_series) == dict
+            ) or self.training_loss_time_series is None
+            os.makedirs(self.run_folder_path, exist_ok=True)
+            ts_df = pd.DataFrame([self.training_loss_time_series])
+            ts_df.to_csv(self.run_losses_df_path, index=False)
+            print(f"Wrote loss time series to csv. at {self.run_losses_df_path}")
 
     def launch(self):
         """
@@ -353,7 +367,7 @@ class HyperparameterGrid:
         # sweep variables
         if grid_with_results is None:
             self.base_learning_rates = []
-            self.base_init_variances = []
+            self.base_init_stddevs = []
 
             self.update_sweep_variables()
 
@@ -365,7 +379,7 @@ class HyperparameterGrid:
     def update_sweep_variables(variables: list = None):
         self.potential_sweep_variables = {
             "base_lr": self.base_learning_rates,
-            "base_init_var": self.base_init_variances,
+            "base_init_stddev": self.base_init_stddevs,
         }
         self.sweep_variables = self.potential_sweep_variables[variables]
 
@@ -386,11 +400,11 @@ class HyperparameterGrid:
         )
 
         self.base_learning_rates = learning_rates
-        self.base_init_variances = init_variances
+        self.base_init_stddevs = init_stddevs
 
         return {"learning_rates": learning_rates, "init_variances": init_variances}
 
-    def launch_grid_search(self, d_model):
+    def launch_grid_search(self, d_model, n_trianing_tokens: int = None):
         """
         Launch grid search with self.sweep_variables
         """
@@ -410,12 +424,13 @@ class HyperparameterGrid:
         # create TrainingRun instance
         for combination in grid:
             base_lr = combination["base_lr"]
-            base_init_var = combination["base_init_var"]
+            base_init_stddev = combination["base_init_stddev"]
             run = TrainingRun(
                 d_model=d_model,
                 base_lr=base_lr,
-                # workdir="TODO",
-                # n_training_tokens="TODO",
+                init_stddev=base_init_stddev,
+                n_training_tokens=n_trianing_tokens,
+                # workdir: automatically set right
             )
 
 
@@ -427,7 +442,10 @@ if not FLAGS.is_parsed():
 if __name__ == "__main__":
     # Example: A simple Pythonic loop for a grid search
     lr = 0.01
+    stddev = 1.0
 
-    runner = TrainingRun(d_model=128, base_lr=lr)
+    runner = TrainingRun(
+        d_model=128, base_lr=lr, init_stddev=stddev, n_training_tokens=163_840_000
+    )
     runner.launch()
     runner.save_run_results()

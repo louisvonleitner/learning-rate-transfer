@@ -41,6 +41,7 @@ class TransformerConfig:
     d_head: int
     ff_multiple: int
     e_norm: bool
+    init_stddev: float
     q_init: str
     r_init: str
     u_init: str
@@ -293,7 +294,8 @@ class MultiHeadAttention(nn.Module):
         x = sharding_constraint(x, MESH_AXES["XNY"], self.global_mesh)
         self.sow("intermediates", "ax_l1", coord_check_l1(x))
 
-        stddev = self.cfg.d_model**-0.5
+        # changed by Louis vvv
+        stddev = self.cfg.init_stddev * self.cfg.d_model**-0.5
         q_init = {"zero": init.zeros, "vs": init.normal(stddev)}[self.cfg.q_init]
         kv_init = init.normal(stddev)
         o_init = {"zero": init.zeros, "vs": init.normal(stddev)}[self.cfg.r_init]
@@ -583,7 +585,8 @@ class Unembedding(nn.Module):
         x = RMSNorm(self.cfg, self.global_mesh, "u")(x)
         x = sharding_constraint(x, MESH_AXES["XNY"], self.global_mesh)
 
-        stddev = self.cfg.d_model**-0.5
+        # changed by Louis vvv
+        stddev = self.cfg.init_stddev * self.cfg.d_model**-0.5
         u_init = {
             "zero": init.zeros,
             "sp": init.normal(stddev),
