@@ -4,7 +4,7 @@
 # ignore log files
 *.log
 
-# run logs
+# run results
 lingle/run_01/
 lingle/wandb/
 wandb/
