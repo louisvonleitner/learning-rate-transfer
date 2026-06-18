@@ -366,6 +366,7 @@ def automatic_modelname_factory():
         f"d{FLAGS.config.dtype}",
         f"b{FLAGS.config.tokens_per_global_batch}",
         f"a{FLAGS.config.lr_base}",
+        f"v{FLAGS.config.init_stddev}",
         f"w{FLAGS.config.wd}",
         f"m{FLAGS.config.d_model}",
         f"l{FLAGS.config.n_layer}",

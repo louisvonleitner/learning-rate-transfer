@@ -22,9 +22,11 @@ class TrainingRun:
         d_model: int,
         base_lr: float,
         init_stddev: float,
+        task_id: int,
         workdir: str = "/mnt/vast-nhr/projects/bthesis_louis_vonleitner/mutransfer/lingle/run_01",
         n_training_tokens=None,
     ):
+        self.task_id = task_id
 
         # get base config
         self.cfg = get_config()
@@ -157,7 +159,7 @@ class TrainingRun:
         FLAGS.verbosity = 0
 
     def generate_run_id(self):
-        return str(self.d_model) + "_" + str(datetime.now())
+        return str(self.d_model) + "_" + str(self.task_id) + "_" + str(datetime.now())
 
     def determine_chinchilla_optimal_n_training_tokens(
         self, chinchilla_multiplier: float = 20
@@ -392,6 +394,7 @@ if __name__ == "__main__":
         base_lr=row["base_lr"],
         init_stddev=row["base_init_stddev"],
         n_training_tokens=5_846_302_720,
+        task_id=task_id,
     )
 
     runner.launch()
