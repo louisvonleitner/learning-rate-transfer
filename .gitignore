@@ -6,3 +6,5 @@
 
 # conda env
 lingle/run_01/
+lingle/wandb/
+wandb/
