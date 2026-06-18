@@ -669,13 +669,13 @@ def train_loop():
             # ===================================
             # Removed by Louis
             # start profiler
-            if jax.process_index() == 0 and step == FLAGS.config.n_save_step:
-                assert FLAGS.config.n_save_step > FLAGS.config.n_print_step
-                logging.info("Starting profiler trace...")
-                jax.profiler.start_trace(
-                    log_dir=modeldir_factory("save", "logging"),
-                    # create_perfetto_trace=True,  # write extra trace file for perfetto
-                )
+            # if jax.process_index() == 0 and step == FLAGS.config.n_save_step:
+            #     assert FLAGS.config.n_save_step > FLAGS.config.n_print_step
+            #     logging.info("Starting profiler trace...")
+            #     jax.profiler.start_trace(
+            #         log_dir=modeldir_factory("save", "logging"),
+            #         # create_perfetto_trace=True,  # write extra trace file for perfetto
+            #     )
             # ===================================
             logging.debug("Done with evaluation action...")
 
