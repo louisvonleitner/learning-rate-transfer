@@ -1,9 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=training_test
+#SBATCH --job-name=mup_grid_128
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
 #SBATCH -c 16
-#SBATCH --output=model_training_test_%j.log
+#SBATCH --array=0-99%15         # 100 grid cells (10x10), max 15 running concurrently
+#SBATCH --output=grid_logs/grid_%A_%a.log
 #SBATCH --constraint="inet"
 #SBATCH --mem=90G
 
@@ -66,6 +67,4 @@ srun python analysis/run_management.py \
     --config.hfds_config=en \
     --config.hfds_datacol=text \
     --wb_enabled=True \
-    --experiment_group="test"
-
-echo "Job completed successfully."
+    --experiment_group="grid_search"

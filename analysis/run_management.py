@@ -166,6 +166,10 @@ class TrainingRun:
         # the accuracy is not totally important, this is a proof of concept
 
         self.n_training_tokens = chinchilla_multiplier * self.n_parameters
+        print(
+            f"Using {self.n_training_tokens} training tokens according to chinchilla."
+        )
+        print(f"Number of Parameters in the model is {self.n_parameters}")
         return self.n_training_tokens
 
     def determine_n_warmup_steps(self):
@@ -226,16 +230,16 @@ class TrainingRun:
         dff = d_model * ffn_factor
         return {
             # embeddings
-            "embedding_matrix_lr": lr,
+            "embedding_matrix_lr": base_lr,
             # attention
-            "attention_weight_matrix_lr": lr / dm,
-            "attention_bias_lr": lr,
+            "attention_weight_matrix_lr": base_lr / dm,
+            "attention_bias_lr": base_lr,
             # feed-forward
-            "w_ffn_in_lr": lr / dm,
-            "w_ffn_out_lr": lr / dff,
-            "bias_lr": lr,
+            "w_ffn_in_lr": base_lr / dm,
+            "w_ffn_out_lr": base_lr / dff,
+            "bias_lr": base_lr,
             # unembedding
-            "unembedding_matrix_lr": lr / dm,
+            "unembedding_matrix_lr": base_lr / dm,
         }
 
     def save_run_results(self, variables_to_save=None):
@@ -265,6 +269,8 @@ class TrainingRun:
                     "n_params_transformer_block",
                     "n_parameters",
                     "base_lr",
+                    "init_stddev",
+                    "absolute_init_stddev",
                     "max_lr",
                     "lr_schedule_name",
                     "optim_name",
@@ -360,92 +366,33 @@ class TrainingRun:
         return run_stats
 
 
-class HyperparameterGrid:
-
-    def __init__(self, grid_with_results: dict = None):
-
-        # sweep variables
-        if grid_with_results is None:
-            self.base_learning_rates = []
-            self.base_init_stddevs = []
-
-            self.update_sweep_variables()
-
-        # if grid_with_results exists
-        else:
-            # TODO: read out grid and optimal lr and init var
-            pass
-
-    def update_sweep_variables(variables: list = None):
-        self.potential_sweep_variables = {
-            "base_lr": self.base_learning_rates,
-            "base_init_stddev": self.base_init_stddevs,
-        }
-        self.sweep_variables = self.potential_sweep_variables[variables]
-
-    def populate_naive_grid(self, n_lrs: int = 5, n_init_vars: int = 5):
-        """
-        Naive grid with parameter spacing log2 base.
-        """
-        min_lr_exponent = -10  # e.g. 2^{-10}
-        max_lr_exponent = -2  # e.g. 2^{-2}
-
-        learning_rates = np.logspace(min_lr_exponent, max_lr_exponent, n_lrs, base=2)
-
-        min_init_var_exponent = -5
-        max_init_var_exponent = 5
-
-        init_variances = np.logspace(
-            min_init_var_exponent, max_init_var_exponent, n_init_vars, base=2
-        )
-
-        self.base_learning_rates = learning_rates
-        self.base_init_stddevs = init_stddevs
-
-        return {"learning_rates": learning_rates, "init_variances": init_variances}
-
-    def launch_grid_search(self, d_model, n_trianing_tokens: int = None):
-        """
-        Launch grid search with self.sweep_variables
-        """
-        grid_dict = self.sweep_variables
-        if grid_dict == {}:
-            raise Exception(
-                "Grid for grid search is empty. Forgot to update_sweep_variables()?"
-            )
-
-        # extract hyperparameters
-        hyperparameters = grid_dict.keys()
-        values = grid_dict.values()
-
-        # create grid with cartesian product - [{lr, init_var}, {lr, init_var}, ...]
-        grid = [dict(zip(keys, v)) for v in itertools.product(*values)]
-
-        # create TrainingRun instance
-        for combination in grid:
-            base_lr = combination["base_lr"]
-            base_init_stddev = combination["base_init_stddev"]
-            run = TrainingRun(
-                d_model=d_model,
-                base_lr=base_lr,
-                init_stddev=base_init_stddev,
-                n_training_tokens=n_trianing_tokens,
-                # workdir: automatically set right
-            )
-
-
 # Parse the CLI arguments if they haven't been parsed yet.
 FLAGS = flags.FLAGS
 if not FLAGS.is_parsed():
     FLAGS(sys.argv)
 
+# if __name__ == "__main__":
+#     # Example: A simple Pythonic loop for a grid search
+#     lr = 0.01
+#     stddev = 1.0
+
+#     runner = TrainingRun(
+#         d_model=1024,
+#         base_lr=lr,
+#         init_stddev=stddev,
+#     )
+
+
 if __name__ == "__main__":
-    # Example: A simple Pythonic loop for a grid search
-    lr = 0.01
-    stddev = 1.0
+    task_id = int(os.environ["SLURM_ARRAY_TASK_ID"])
+    row = pd.read_csv("grid_manifest.csv").iloc[task_id]
 
     runner = TrainingRun(
-        d_model=128, base_lr=lr, init_stddev=stddev, n_training_tokens=163_840_000
+        d_model=128,
+        base_lr=row["base_lr"],
+        init_stddev=row["base_init_stddev"],
+        n_training_tokens=5_846_302_720,
     )
+
     runner.launch()
     runner.save_run_results()
