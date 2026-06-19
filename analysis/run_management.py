@@ -86,12 +86,12 @@ class TrainingRun:
         self.sequence_len = self.cfg.sequence_len
         assert self.tokens_per_global_batch % self.sequence_len == 0
         self.batch_size = self.tokens_per_global_batch / self.sequence_len
-        self.n_pretrain_steps = np.ceil(
-            self.n_training_tokens / self.tokens_per_global_batch
+        self.n_pretrain_step = int(
+            np.ceil(self.n_training_tokens / self.tokens_per_global_batch)
         )
-        self.n_warmup_steps = self.determine_n_warmup_steps()
+        self.n_warmup_step = int(self.determine_n_warmup_step())
 
-        assert self.n_warmup_steps <= self.n_pretrain_steps
+        assert self.n_warmup_step <= self.n_pretrain_step
 
         # getting absolute lrs after mup
         self.absolute_lrs = self.get_abs_mup_scaling(
@@ -138,8 +138,8 @@ class TrainingRun:
         self.cfg.absolute_init_stddev = self.absolute_init_stddev
         self.cfg.n_layer = self.model_depth
         self.cfg.d_head = self.head_dimension
-        self.cfg.n_pretrain_steps = self.n_pretrain_steps
-        self.cfg.n_warmup_steps = self.n_warmup_steps
+        self.cfg.n_pretrain_step = self.n_pretrain_step
+        self.cfg.n_warmup_step = self.n_warmup_step
 
         # 3. Spoof the FLAGS object for the third-party library.
         # ===================================================================
@@ -174,27 +174,27 @@ class TrainingRun:
         print(f"Number of Parameters in the model is {self.n_parameters}")
         return self.n_training_tokens
 
-    def determine_n_warmup_steps(self):
+    def determine_n_warmup_step(self):
         """
         Determines the number of warmup iterations.
         At least 10,000 warmup iterations are recommended for training stability in NLP.
         Therefore, we clip the warmup iterations to 10,000 if there would be less.
         """
-        fraction = int(self.n_pretrain_steps / 10)
+        fraction = int(self.n_pretrain_step / 10)
 
         if fraction < 10_000:
-            if self.n_pretrain_steps >= 10_000:
-                self.n_warmup_steps = 10_000
+            if self.n_pretrain_step >= 10_000:
+                self.n_warmup_step = 10_000
             else:
-                self.n_warmup_steps = self.n_pretrain_steps
+                self.n_warmup_step = self.n_pretrain_step
                 print(
-                    "All training iterations are warmup iterations, because n_iterations {self.n_pretrain_steps} < 10,000...",
+                    "All training iterations are warmup iterations, because n_iterations {self.n_pretrain_step} < 10,000...",
                     flush=True,
                 )
         else:
-            self.n_warmup_steps = fraction
+            self.n_warmup_step = int(fraction)
 
-        return self.n_warmup_steps
+        return self.n_warmup_step
 
     def determine_theoretical_flops_and_walltime(self, GPU="A100", GPU_stats=None):
         """
@@ -284,8 +284,8 @@ class TrainingRun:
                     "tokens_per_global_batch",
                     "batch_size",
                     "sequence_len",
-                    "n_pretrain_steps",
-                    "n_warmup_steps",
+                    "n_pretrain_step",
+                    "n_warmup_step",
                     "embedding_matrix_lr",
                     "attention_weight_matrix_lr",
                     "attention_bias_lr",
