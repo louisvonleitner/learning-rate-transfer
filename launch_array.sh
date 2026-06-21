@@ -57,6 +57,7 @@ srun python analysis/run_management.py \
     --config=lingle/mu_transformer/configs/Louis_base.py \
     --mode=train \
     --workdir=lingle/run_01 \
+    --config.d_model=256 \
     --config.tokens_per_global_batch=65536 \
     --config.sequence_len=1024 \
     --config.n_mesh_rows=1 \
@@ -67,4 +68,5 @@ srun python analysis/run_management.py \
     --config.hfds_config=en \
     --config.hfds_datacol=text \
     --wb_enabled=True \
-    --experiment_group="grid_search"
+    --experiment_group="grid_search" \
+    # --config.n_pretrain_step=5_846_302_720 \
