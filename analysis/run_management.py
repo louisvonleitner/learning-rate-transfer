@@ -169,9 +169,10 @@ class TrainingRun:
 
         self.n_training_tokens = chinchilla_multiplier * self.n_parameters
         print(
-            f"Using {self.n_training_tokens} training tokens according to chinchilla."
+            f"Using {self.n_training_tokens} training tokens according to chinchilla.",
+            flush=True,
         )
-        print(f"Number of Parameters in the model is {self.n_parameters}")
+        print(f"Number of Parameters in the model is {self.n_parameters}", flush=True)
         return self.n_training_tokens
 
     def determine_n_warmup_step(self):
@@ -390,10 +391,10 @@ if __name__ == "__main__":
     row = pd.read_csv("analysis/grid_manifest.csv").iloc[task_id]
 
     runner = TrainingRun(
-        d_model=128,
+        d_model=256,
         base_lr=row["base_lr"],
         init_stddev=row["base_init_stddev"],
-        n_training_tokens=5_846_302_720,
+        # n_training_tokens=5_846_302_720,
         task_id=task_id,
     )
 

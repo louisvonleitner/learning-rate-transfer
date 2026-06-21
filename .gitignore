@@ -9,3 +9,7 @@ lingle/run_01/
 lingle/wandb/
 wandb/
 results/
+
+# continue
+.continueignore
+.continue/

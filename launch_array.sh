@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=mup_grid_128
+#SBATCH --job-name=mup_grid_256
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
 #SBATCH -c 16
-#SBATCH --array=0-99%15         # 100 grid cells (10x10), max 15 running concurrently
-#SBATCH --output=grid_logs/grid_%A_%a.log
+#SBATCH --array=0-49%50        # 100 grid cells (10x10), max 50 running concurrently
+#SBATCH --output=grid_logs/256_chinchilla_length/grid_%A_%a.log
 #SBATCH --constraint="inet"
 #SBATCH --mem=90G
 
