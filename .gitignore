@@ -3,6 +3,9 @@
 *.npy
 # ignore log files
 *.log
+# ignore pycaches
+**/__pycache__/
+*.pyc
 
 # run results
 lingle/run_01/
