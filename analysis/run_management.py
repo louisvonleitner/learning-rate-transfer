@@ -371,30 +371,24 @@ class TrainingRun:
 
 # Parse the CLI arguments if they haven't been parsed yet.
 FLAGS = flags.FLAGS
+# --- Register Louis's CLI Overrides ---
+flags.DEFINE_integer("d_model", None, "Override model dimension via CLI")
+flags.DEFINE_integer("n_training_tokens", None, "Override pretraining steps via CLI")
+# --------------------------------------
 if not FLAGS.is_parsed():
     FLAGS(sys.argv)
 
-# if __name__ == "__main__":
-#     # Example: A simple Pythonic loop for a grid search
-#     lr = 0.01
-#     stddev = 1.0
 
-#     runner = TrainingRun(
-#         d_model=1024,
-#         base_lr=lr,
-#         init_stddev=stddev,
-#     )
-
-
+# main launching function
 if __name__ == "__main__":
     task_id = int(os.environ["SLURM_ARRAY_TASK_ID"])
     row = pd.read_csv("analysis/grid_manifest.csv").iloc[task_id]
 
     runner = TrainingRun(
-        d_model=256,
+        d_model=FLAGS.d_model,
         base_lr=row["base_lr"],
         init_stddev=row["base_init_stddev"],
-        # n_training_tokens=5_846_302_720,
+        n_training_tokens=FLAGS.n_training_tokens,
         task_id=task_id,
     )
 
