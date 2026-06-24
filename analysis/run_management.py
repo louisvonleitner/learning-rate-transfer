@@ -25,6 +25,7 @@ class TrainingRun:
         task_id: int,
         workdir: str = "/mnt/vast-nhr/projects/bthesis_louis_vonleitner/mutransfer/lingle/run_01",
         n_training_tokens=None,
+        lr_schedule_mode="clipping",
     ):
         self.task_id = task_id
 
@@ -62,6 +63,7 @@ class TrainingRun:
         self.base_lr = base_lr
         self.max_lr = self.base_lr
         self.lr_schedule_name = self.cfg.lr_schedule_name
+        self.lr_schedule_mode = lr_schedule_mode
         self.optim_name = self.cfg.optim_name
         self.optim_beta1 = self.cfg.optim_beta1
         self.optim_beta2 = self.cfg.optim_beta2
@@ -175,25 +177,38 @@ class TrainingRun:
         print(f"Number of Parameters in the model is {self.n_parameters}", flush=True)
         return self.n_training_tokens
 
-    def determine_n_warmup_step(self):
+    def determine_n_warmup_step(self, mode="clipping"):
         """
         Determines the number of warmup iterations.
+
+        mode == clipping:
         At least 10,000 warmup iterations are recommended for training stability in NLP.
         Therefore, we clip the warmup iterations to 10,000 if there would be less.
+        If there are not even 10,000 iterations in total, we clip the warmup iterations to the total number of training steps.
+
+        mode == relative:
+        We set the number of warmup iterations as exactly 1/10-th of the total pretrain iterations.
         """
         fraction = int(self.n_pretrain_step / 10)
 
-        if fraction < 10_000:
-            if self.n_pretrain_step >= 10_000:
-                self.n_warmup_step = 10_000
+        if mode == "clipping":
+            if fraction < 10_000:
+                if self.n_pretrain_step >= 10_000:
+                    self.n_warmup_step = 10_000
+                else:
+                    self.n_warmup_step = self.n_pretrain_step
+                    print(
+                        "All training iterations are warmup iterations, because n_iterations {self.n_pretrain_step} < 10,000...",
+                        flush=True,
+                    )
             else:
-                self.n_warmup_step = self.n_pretrain_step
-                print(
-                    "All training iterations are warmup iterations, because n_iterations {self.n_pretrain_step} < 10,000...",
-                    flush=True,
-                )
-        else:
+                self.n_warmup_step = int(fraction)
+        elif mode == "relative":
             self.n_warmup_step = int(fraction)
+        else:
+            raise Exception(
+                "Mode {mode} is not a valid option, choose from [clipping, relative]."
+            )
 
         return self.n_warmup_step
 
@@ -276,6 +291,7 @@ class TrainingRun:
                     "absolute_init_stddev",
                     "max_lr",
                     "lr_schedule_name",
+                    "lr_schedule_mode",
                     "optim_name",
                     "optim_beta1",
                     "optim_beta2",
@@ -374,6 +390,7 @@ FLAGS = flags.FLAGS
 # --- Register Louis's CLI Overrides ---
 flags.DEFINE_integer("d_model", None, "Override model dimension via CLI")
 flags.DEFINE_integer("n_training_tokens", None, "Override pretraining steps via CLI")
+flags.DEFINE_string("lr_schedule_mode", "clipping", "Override lr schedule mode via CLI")
 # --------------------------------------
 if not FLAGS.is_parsed():
     FLAGS(sys.argv)
@@ -390,6 +407,7 @@ if __name__ == "__main__":
         init_stddev=row["base_init_stddev"],
         n_training_tokens=FLAGS.n_training_tokens,
         task_id=task_id,
+        lr_schedule_mode=FLAGS.lr_schedule_mode,
     )
 
     runner.launch()

@@ -1,12 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=mup_grid_256
+#SBATCH --job-name=1024_whole
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
 #SBATCH -c 16
-#SBATCH --array=0-0%50        # 100 grid cells (10x10), max 50 running concurrently
-#SBATCH --output=grid_logs/256_chinchilla_length/grid_%A_%a.log
+#SBATCH --array=0-49%50        # 100 grid cells (10x10), max 50 running concurrently
+#SBATCH --output=grid_logs/1024_whole_length/grid_%A_%a.log
 #SBATCH --constraint="inet"
 #SBATCH --mem=90G
+#SBATCH -t 2-00:00:00
 
 # Tells Hugging Face NOT to attempt any network requests
 export HF_DATASETS_OFFLINE=1
@@ -68,5 +69,6 @@ srun python analysis/run_management.py \
     --config.hfds_datacol=text \
     --wb_enabled=True \
     --experiment_group="grid_search" \
-    --d_model=256 \
+    --d_model=1024 \
     --n_training_tokens=5_846_302_720 \
+    --lr_schedule_mode=clipping \
