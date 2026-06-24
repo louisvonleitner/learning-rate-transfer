@@ -19,7 +19,6 @@ class TrainingRun:
 
     def __init__(
         self,
-        d_model: int,
         base_lr: float,
         init_stddev: float,
         task_id: int,
@@ -33,12 +32,12 @@ class TrainingRun:
         self.cfg = get_config()
 
         # model parameters
-        self.d_model = d_model
+        self.d_model = self.cfg.d_model
         self.model_depth = 24  # same over all experiments
         self.head_dimension = 128  # same over all experiments
         assert self.d_model % self.head_dimension == 0
         self.n_heads = self.d_model / self.head_dimension
-        self.d_ffn = d_model * 4
+        self.d_ffn = self.d_model * 4
 
         # model size
         self.vocab_size = 32128  # from T5 Tokenizer
@@ -74,14 +73,19 @@ class TrainingRun:
         self.init_stddev = init_stddev
         self.absolute_init_stddev = self.init_stddev * self.d_model**-0.5
 
-        # Chinchilla is used if n_training_tokens == None
-        if n_training_tokens == None:
+        # Chinchilla is used if n_pretrain_step is 2500 (that means it was not given in bash script)
+        if self.cfg.n_pretrain_step == 2500:
             self.n_training_tokens = (
                 self.determine_chinchilla_optimal_n_training_tokens()
             )
-        # If n_training_tokens is given
+        # If n_pretrain_step is given in bash script
+        elif self.cfg.n_pretrain_step == 5_846_302_720:
+            self.n_training_tokens = self.cfg.n_pretrain_step
+        # this should not happen
         else:
-            self.n_training_tokens = n_training_tokens
+            raise Exception(
+                f"Config's n_pretrain_step = {self.cfg.n_pretrain_step} should not happen!"
+            )
 
         # batch and sequence length
         self.tokens_per_global_batch = self.cfg.tokens_per_global_batch
@@ -134,7 +138,6 @@ class TrainingRun:
 
         # modify base config
         # ===================================================================
-        self.cfg.d_model = self.d_model
         self.cfg.lr_base = self.base_lr
         self.cfg.init_stddev = self.init_stddev
         self.cfg.absolute_init_stddev = self.absolute_init_stddev
