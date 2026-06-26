@@ -96,7 +96,7 @@ class TrainingRun:
         self.n_pretrain_step = int(
             np.ceil(self.n_training_tokens / self.tokens_per_global_batch)
         )
-        self.n_warmup_step = int(self.determine_n_warmup_step())
+        self.n_warmup_step = int(self.determine_n_warmup_step(mode=self.lr_schedule_mode))
 
         assert self.n_warmup_step <= self.n_pretrain_step
 
@@ -192,7 +192,7 @@ class TrainingRun:
         If there are not even 10,000 iterations in total, we clip the warmup iterations to the total number of training steps.
 
         mode == relative:
-        We set the number of warmup iterations as exactly 1/10-th of the total pretrain iterations.
+        We set the number of warmup iterations as exactly 10_000/89_208-th of the total pretrain iterations.
         """
         factor = 10_000 / 89_208     # so far used: 89_208 total steps and 10_000 warmup steps
         fraction = int(self.n_pretrain_step * factor)

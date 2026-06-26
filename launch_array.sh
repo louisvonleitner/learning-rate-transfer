@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=1024_whole
+#SBATCH --job-name=512_relative_mode
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
 #SBATCH -c 16
-#SBATCH --array=34-34%50        # 100 grid cells (10x10), max 50 running concurrently
-#SBATCH --output=grid_logs/1024_whole_length/grid_%A_%a.log
+#SBATCH --array=0-49%50        # 100 grid cells (10x10), max 50 running concurrently
+#SBATCH --output=grid_logs/512_chinchilla_length_relative_mode/grid_%A_%a.log
 #SBATCH --constraint="inet"
 #SBATCH --mem=90G
 #SBATCH -t 2-00:00:00
@@ -69,7 +69,6 @@ srun python analysis/run_management.py \
     --config.hfds_datacol=text \
     --wb_enabled=True \
     --experiment_group="grid_search" \
-    --d_model=1024 \
-    --n_training_tokens=5_846_302_720 \
-    --lr_schedule_mode=clipping \
-    # --config.d_model=256 \
+    --d_model=512 \
+    --lr_schedule_mode=relative \
+    # --n_training_tokens=5_846_302_720 \
