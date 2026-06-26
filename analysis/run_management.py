@@ -23,7 +23,8 @@ class TrainingRun:
         init_stddev: float,
         task_id: int,
         workdir: str = "/mnt/vast-nhr/projects/bthesis_louis_vonleitner/mutransfer/lingle/run_01",
-        n_training_tokens=None,
+        d_model: int = None,
+        n_training_tokens: int = None,
         lr_schedule_mode="clipping",
     ):
         self.task_id = task_id
@@ -32,7 +33,7 @@ class TrainingRun:
         self.cfg = get_config()
 
         # model parameters
-        self.d_model = self.cfg.d_model
+        self.d_model = d_model
         self.model_depth = 24  # same over all experiments
         self.head_dimension = 128  # same over all experiments
         assert self.d_model % self.head_dimension == 0
@@ -73,18 +74,18 @@ class TrainingRun:
         self.init_stddev = init_stddev
         self.absolute_init_stddev = self.init_stddev * self.d_model**-0.5
 
-        # Chinchilla is used if n_pretrain_step is 2500 (that means it was not given in bash script)
-        if self.cfg.n_pretrain_step == 2500:
+        # Chinchilla is used if n_training_tokens was not given in bash script
+        if n_training_tokens is None: 
             self.n_training_tokens = (
                 self.determine_chinchilla_optimal_n_training_tokens()
             )
         # If n_pretrain_step is given in bash script
-        elif self.cfg.n_pretrain_step == 5_846_302_720:
-            self.n_training_tokens = self.cfg.n_pretrain_step
+        elif n_training_tokens == 5_846_302_720:
+            self.n_training_tokens = n_training_tokens
         # this should not happen
         else:
             raise Exception(
-                f"Config's n_pretrain_step = {self.cfg.n_pretrain_step} should not happen!"
+                f"Bash Script's pretrain tokens are {n_training_tokens}, which should not be the case"
             )
 
         # batch and sequence length
@@ -138,6 +139,7 @@ class TrainingRun:
 
         # modify base config
         # ===================================================================
+        self.cfg.d_model = self.d_model
         self.cfg.lr_base = self.base_lr
         self.cfg.init_stddev = self.init_stddev
         self.cfg.absolute_init_stddev = self.absolute_init_stddev
@@ -406,11 +408,11 @@ if __name__ == "__main__":
     row = pd.read_csv("analysis/grid_manifest.csv").iloc[task_id]
 
     runner = TrainingRun(
-        d_model=FLAGS.d_model,
         base_lr=row["base_lr"],
         init_stddev=row["base_init_stddev"],
-        n_training_tokens=FLAGS.n_training_tokens,
         task_id=task_id,
+        d_model=FLAGS.d_model,
+        n_training_tokens=FLAGS.n_training_tokens,
         lr_schedule_mode=FLAGS.lr_schedule_mode,
     )
 
