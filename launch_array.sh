@@ -3,7 +3,7 @@
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
 #SBATCH -c 16
-#SBATCH --array=0-49%50        # 100 grid cells (10x10), max 50 running concurrently
+#SBATCH --array=34-34%50        # 100 grid cells (10x10), max 50 running concurrently
 #SBATCH --output=grid_logs/1024_whole_length/grid_%A_%a.log
 #SBATCH --constraint="inet"
 #SBATCH --mem=90G
@@ -58,7 +58,6 @@ srun python analysis/run_management.py \
     --config=lingle/mu_transformer/configs/Louis_base.py \
     --mode=train \
     --workdir=lingle/run_01 \
-    --config.d_model=256 \
     --config.tokens_per_global_batch=65536 \
     --config.sequence_len=1024 \
     --config.n_mesh_rows=1 \
@@ -73,3 +72,4 @@ srun python analysis/run_management.py \
     --d_model=1024 \
     --n_training_tokens=5_846_302_720 \
     --lr_schedule_mode=clipping \
+    # --config.d_model=256 \

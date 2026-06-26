@@ -192,7 +192,8 @@ class TrainingRun:
         mode == relative:
         We set the number of warmup iterations as exactly 1/10-th of the total pretrain iterations.
         """
-        fraction = int(self.n_pretrain_step / 10)
+        factor = 10_000 / 89_208     # so far used: 89_208 total steps and 10_000 warmup steps
+        fraction = int(self.n_pretrain_step * factor)
 
         if mode == "clipping":
             if fraction < 10_000:
