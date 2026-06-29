@@ -297,7 +297,6 @@ class TrainingRun:
                     "absolute_init_stddev",
                     "max_lr",
                     "lr_schedule_name",
-                    "lr_schedule_mode",
                     "optim_name",
                     "optim_beta1",
                     "optim_beta2",
@@ -322,6 +321,7 @@ class TrainingRun:
                     "final_loss",
                     "best_loss",
                     "training_wall_time",
+                    "lr_schedule_mode",
                 ]
             # variables_to_save is not None
             else:
@@ -339,14 +339,22 @@ class TrainingRun:
             # handle simultaneous accessing of file by locking it
             lock = FileLock(self.base_result_df_path + ".lock")
             with lock:
+                # Check if file exists and has content
+                file_exists = os.path.exists(self.base_result_df_path) and os.path.getsize(self.base_result_df_path) > 0
+                
+                if file_exists:
+                    # 1. Read ONLY the header row of the existing CSV
+                    existing_columns = pd.read_csv(self.base_result_df_path, nrows=0).columns.tolist()
+                    
+                    # 2. Force results_df to match the existing column order
+                    results_df = results_df.reindex(columns=existing_columns)
+                    header_mode = False
+                else:
+                    header_mode = True  # Empty file means we write the header in variables_to_save order
+
                 with open(self.base_result_df_path, "a") as f:
-                    header_mode = f.tell() == 0  # empty file means no header yet
                     # write with pd.to_csv
                     results_df.to_csv(f, index=False, mode="a", header=header_mode)
-
-            print(
-                f"Wrote results of run to global result csv. at {self.base_result_df_path}"
-            )
 
             # Write loss time series to csv
             # ===================================
