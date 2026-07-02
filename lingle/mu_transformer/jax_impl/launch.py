@@ -375,6 +375,8 @@ def automatic_modelname_factory():
         f"r{FLAGS.config.optim_rule}",
         f"s{FLAGS.config.lr_schedule_name}",
         f"p{FLAGS.config.n_pretrain_step}",
+        f"sm{FLAGS.config.lr_schedule_mode}",
+        f"h{FLAGS.config.d_head}"
     ]
     return "_".join(parts)
 

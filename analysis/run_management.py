@@ -26,6 +26,7 @@ class TrainingRun:
         d_model: int = None,
         n_training_tokens: int = None,
         lr_schedule_mode="clipping",
+        head_dimension: int = 128,
     ):
         self.task_id = task_id
 
@@ -35,7 +36,7 @@ class TrainingRun:
         # model parameters
         self.d_model = d_model
         self.model_depth = 24  # same over all experiments
-        self.head_dimension = 128  # same over all experiments
+        self.head_dimension = head_dimension  # same over all experiments
         assert self.d_model % self.head_dimension == 0
         self.n_heads = self.d_model / self.head_dimension
         self.d_ffn = self.d_model * 4
@@ -147,6 +148,7 @@ class TrainingRun:
         self.cfg.d_head = self.head_dimension
         self.cfg.n_pretrain_step = self.n_pretrain_step
         self.cfg.n_warmup_step = self.n_warmup_step
+        self.cfg.lr_schedule_mode = self.lr_schedule_mode
 
         # 3. Spoof the FLAGS object for the third-party library.
         # ===================================================================
@@ -405,6 +407,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_integer("d_model", None, "Override model dimension via CLI")
 flags.DEFINE_integer("n_training_tokens", None, "Override pretraining steps via CLI")
 flags.DEFINE_string("lr_schedule_mode", "clipping", "Override lr schedule mode via CLI")
+flags.DEFINE_integer("head_dimension", 128, "Transformer Head Dimension")
 # --------------------------------------
 if not FLAGS.is_parsed():
     FLAGS(sys.argv)
@@ -422,6 +425,7 @@ if __name__ == "__main__":
         d_model=FLAGS.d_model,
         n_training_tokens=FLAGS.n_training_tokens,
         lr_schedule_mode=FLAGS.lr_schedule_mode,
+        head_dimension=FLAGS.head_dimension,
     )
 
     runner.launch()
