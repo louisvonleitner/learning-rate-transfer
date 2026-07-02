@@ -31,7 +31,7 @@ class HyperparameterGrid:
         """
         Naive grid with parameter spacing log2 base.
         """
-        min_lr_exponent = -8  # e.g. 2^{-10}
+        min_lr_exponent = -10  # e.g. 2^{-10}
         max_lr_exponent = -3  # e.g. 2^{-2}
 
         learning_rates = np.logspace(min_lr_exponent, max_lr_exponent, n_lrs, base=2)
@@ -45,6 +45,8 @@ class HyperparameterGrid:
 
         self.base_learning_rates = learning_rates
         self.base_init_stddevs = init_stddevs
+
+
 
         return {"learning_rates": learning_rates, "init_stddevs": init_stddevs}
 
