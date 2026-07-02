@@ -149,6 +149,7 @@ class TrainingRun:
         self.cfg.n_pretrain_step = self.n_pretrain_step
         self.cfg.n_warmup_step = self.n_warmup_step
         self.cfg.lr_schedule_mode = self.lr_schedule_mode
+        self.cfg.qk_scale = 1 / self.cfg.d_head  # might have to be updated again, so we do it here
 
         # 3. Spoof the FLAGS object for the third-party library.
         # ===================================================================
