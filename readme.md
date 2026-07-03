@@ -1,0 +1,2 @@
+This project is an implementation of LLM-Transformer Training under muTransfer [1]. 
+Specifically, the experiments are conducted to analyse the accuracy and compute scaling of muTransfer for different model sizes.
