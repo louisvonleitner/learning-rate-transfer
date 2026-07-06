@@ -13,6 +13,7 @@
 # limitations under the License.
 import functools
 import os
+import warnings
 import posixpath
 import re
 import sys
@@ -183,7 +184,8 @@ def get_rel_mup_scaling(lr):
     # Raise warning if d_base does not divide d_model cleanly
     # This might be d_model < d_base and intended
     if FLAGS.config.d_model % FLAGS.config.d_base != 0:
-        raise Warning(f"d_model / d_base != 0, make sure it is intended! Could be d_model < d_base")
+        warnings.warn(f"d_model / d_base != 0, make sure it is intended! Could be d_model < d_base", UserWarning)
+
     return {
         # embeddings
         "g_e": lr,
