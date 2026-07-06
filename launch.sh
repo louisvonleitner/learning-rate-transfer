@@ -45,15 +45,15 @@ fi
 JOB_NAME="${DMODEL}_${LR_MODE}"
 if [[ "$LR_MODE" == "clipping" ]]; then
     if [[ "$N_TOKENS" == "5_846_302_720" ]]; then
-        JOB_NAME="${DMODEL}_clipping"
-        OUTPUT_DIR="grid_logs/${DMODEL}_whole_length"
-    else
         JOB_NAME="${DMODEL}_whole"
-        OUTPUT_DIR="grid_logs/${DMODEL}_chinchilla_length"
+        OUTPUT_DIR="grid_logs/${HEAD_DIM}_${DMODEL}_whole_length"
+    else
+        JOB_NAME="${DMODEL}_clipping"
+        OUTPUT_DIR="grid_logs/${HEAD_DIM}_${DMODEL}_chinchilla_length"
     fi
 elif [[ "$LR_MODE" == "relative" ]]; then
     JOB_NAME="${DMODEL}_relative"
-    OUTPUT_DIR="grid_logs/${DMODEL}_chinchilla_length_relative_mode"
+    OUTPUT_DIR="grid_logs/${HEAD_DIM}_${DMODEL}_chinchilla_length_relative_mode"
 fi
 
 OUTPUT_LOG="${OUTPUT_DIR}/grid_%A_%a.log"
