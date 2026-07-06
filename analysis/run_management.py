@@ -27,11 +27,14 @@ class TrainingRun:
         n_training_tokens: int = None,
         lr_schedule_mode="clipping",
         head_dimension: int = 128,
+        rng_seed: int = 0,
     ):
         self.task_id = task_id
 
         # get base config
         self.cfg = get_config()
+
+        self.rng_seed = rng_seed
 
         # model parameters
         self.d_model = d_model
@@ -325,6 +328,7 @@ class TrainingRun:
                     "best_loss",
                     "training_wall_time",
                     "lr_schedule_mode",
+                    "rng_seed",
                 ]
             # variables_to_save is not None
             else:
@@ -409,6 +413,7 @@ flags.DEFINE_integer("d_model", None, "Override model dimension via CLI")
 flags.DEFINE_integer("n_training_tokens", None, "Override pretraining steps via CLI")
 flags.DEFINE_string("lr_schedule_mode", "clipping", "Override lr schedule mode via CLI")
 flags.DEFINE_integer("head_dimension", 128, "Transformer Head Dimension")
+flags.DEFINE_integer("rng_seed", 0, "Random Generator Seed")
 # --------------------------------------
 if not FLAGS.is_parsed():
     FLAGS(sys.argv)
@@ -427,6 +432,7 @@ if __name__ == "__main__":
         n_training_tokens=FLAGS.n_training_tokens,
         lr_schedule_mode=FLAGS.lr_schedule_mode,
         head_dimension=FLAGS.head_dimension,
+        rng_seed=FLAGS.rng_seed
     )
 
     runner.launch()

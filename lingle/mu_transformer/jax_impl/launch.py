@@ -178,7 +178,12 @@ def get_standard_scaling(lr):
 
 
 def get_rel_mup_scaling(lr):
-    wm = FLAGS.config.d_model // FLAGS.config.d_base  # width multiple
+    wm = FLAGS.config.d_model / FLAGS.config.d_base  # width multiple
+    
+    # Raise warning if d_base does not divide d_model cleanly
+    # This might be d_model < d_base and intended
+    if FLAGS.config.d_model % FLAGS.config.d_base != 0:
+        raise Warning(f"d_model / d_base != 0, make sure it is intended! Could be d_model < d_base")
     return {
         # embeddings
         "g_e": lr,
@@ -376,7 +381,8 @@ def automatic_modelname_factory():
         f"s{FLAGS.config.lr_schedule_name}",
         f"p{FLAGS.config.n_pretrain_step}",
         f"sm{FLAGS.config.lr_schedule_mode}",
-        f"h{FLAGS.config.d_head}"
+        f"h{FLAGS.config.d_head}",
+        f"rng{FLAGS.rng_seed}"
     ]
     return "_".join(parts)
 
