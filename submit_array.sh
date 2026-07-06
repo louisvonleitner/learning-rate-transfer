@@ -87,6 +87,16 @@ if [[ "$N_TOKENS" != "None" ]]; then
     PY_ARGS+=(--n_training_tokens="$N_TOKENS")
 fi
 
+
+echo "=== SLURM DEBUG START ==="
+echo "Current Working Directory: $(pwd)"
+echo "Does 'analysis' directory exist?"
+ls -ld analysis 2>&1
+echo "Contents of 'analysis' directory (if it exists):"
+ls -l analysis 2>&1
+echo "=== SLURM DEBUG END ==="
+
+
 # --- 4. Execute the Target Script ---
 echo "Launching model training..."
 srun python analysis/run_management.py \
