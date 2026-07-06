@@ -115,7 +115,7 @@ def write_datasets_to_memmap(
     except RuntimeWarning:
         pass
 
-    # 1. Check which splits already exist
+    # Check which splits already exist
     all_splits = ["train", "validation", "test"]
     missing_splits = []
     final_fps = {}
@@ -142,7 +142,7 @@ def write_datasets_to_memmap(
     os.makedirs(base_tmp_dir, exist_ok=True)
     logging.info(f"Using temporary directory: {base_tmp_dir}")
 
-    # 2. Bypass cluster-wide file lock deadlocks
+    # Bypass cluster-wide file lock deadlocks
     class DummyFileLock:
         def __init__(self, *args, **kwargs):
             pass
@@ -161,7 +161,7 @@ def write_datasets_to_memmap(
 
     filelock.FileLock = DummyFileLock
 
-    # 3. Handle native vs monolithic loading
+    # Handle native vs monolithic loading
     hfds_splits_set = set(hfds.get_dataset_split_names(hfds_identifier, hfds_config))
     has_native_splits = hfds_splits_set == {"train", "validation", "test"}
 
@@ -188,7 +188,7 @@ def write_datasets_to_memmap(
             logging.info(f"Sharding dataset for shard {shard_id + 1}/{n_shard}...")
             ds = ds.shard(num_shards=n_shard, index=shard_id)
 
-        # 4. Smart Sub-selection logic
+        # Smart Sub-selection logic
         sharded_val_count = batch_size * 100
 
         # Calculate how many rows we need to randomly reserve at the end
@@ -228,7 +228,7 @@ def write_datasets_to_memmap(
                 test_idx = sampled_indices[offset : offset + sharded_val_count]
                 ds_dict["test"] = ds.select(test_idx)
 
-    # 5. Process missing splits
+    # Process missing splits
     for split_name, current_ds in ds_dict.items():
         logging.info(f"--- Processing pipeline for '{split_name}' ---")
 
