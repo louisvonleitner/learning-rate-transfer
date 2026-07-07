@@ -39,12 +39,12 @@ class TrainingRun:
         # model parameters
         self.d_model = d_model
         self.model_depth = 24  # same over all experiments
-        self.head_dimension = head_dimension  # same over all experiments
+        self.head_dimension = head_dimension
         assert self.d_model % self.head_dimension == 0
         self.n_heads = self.d_model / self.head_dimension
         self.d_ffn = self.d_model * 4
 
-        # model size
+        # model size / parameter count
         self.vocab_size = 32128  # from T5 Tokenizer
         self.n_params_embedding = self.vocab_size * self.d_model
         self.n_params_encoder = self.n_params_embedding
@@ -79,7 +79,7 @@ class TrainingRun:
         self.absolute_init_stddev = self.init_stddev * self.d_model**-0.5
 
         # Chinchilla is used if n_training_tokens was not given in bash script
-        if n_training_tokens is None: 
+        if n_training_tokens is None:
             self.n_training_tokens = (
                 self.determine_chinchilla_optimal_n_training_tokens()
             )
@@ -100,7 +100,9 @@ class TrainingRun:
         self.n_pretrain_step = int(
             np.ceil(self.n_training_tokens / self.tokens_per_global_batch)
         )
-        self.n_warmup_step = int(self.determine_n_warmup_step(mode=self.lr_schedule_mode))
+        self.n_warmup_step = int(
+            self.determine_n_warmup_step(mode=self.lr_schedule_mode)
+        )
 
         assert self.n_warmup_step <= self.n_pretrain_step
 
@@ -152,7 +154,9 @@ class TrainingRun:
         self.cfg.n_pretrain_step = self.n_pretrain_step
         self.cfg.n_warmup_step = self.n_warmup_step
         self.cfg.lr_schedule_mode = self.lr_schedule_mode
-        self.cfg.qk_scale = 1 / self.cfg.d_head  # might have to be updated again, so we do it here
+        self.cfg.qk_scale = (
+            1 / self.cfg.d_head
+        )  # might have to be updated again, so we do it here
 
         # 3. Spoof the FLAGS object for the third-party library.
         # ===================================================================
@@ -163,6 +167,7 @@ class TrainingRun:
 
         # Mocking the remaining flags from the third-party main() snippet you provided
         FLAGS.experiment_group = "grid_search"
+        # vvvvvvvv TODO: verify which RNG seed is used in training and remove this one (?)
         FLAGS.rng_seed = 42
         FLAGS.rng_fold = 0
         FLAGS.wb_enabled = True  # Set to True if you want wandb
@@ -200,7 +205,8 @@ class TrainingRun:
         mode == relative:
         We set the number of warmup iterations as exactly 10_000/89_208-th of the total pretrain iterations.
         """
-        factor = 10_000 / 89_208     # so far used: 89_208 total steps and 10_000 warmup steps
+        # so far used for whole training: 89_208 total steps and 10_000 warmup steps
+        factor = 10_000 / 89_208
         fraction = int(self.n_pretrain_step * factor)
 
         if mode == "clipping":
@@ -347,12 +353,17 @@ class TrainingRun:
             lock = FileLock(self.base_result_df_path + ".lock")
             with lock:
                 # Check if file exists and has content
-                file_exists = os.path.exists(self.base_result_df_path) and os.path.getsize(self.base_result_df_path) > 0
-                
+                file_exists = (
+                    os.path.exists(self.base_result_df_path)
+                    and os.path.getsize(self.base_result_df_path) > 0
+                )
+
                 if file_exists:
                     # 1. Read ONLY the header row of the existing CSV
-                    existing_columns = pd.read_csv(self.base_result_df_path, nrows=0).columns.tolist()
-                    
+                    existing_columns = pd.read_csv(
+                        self.base_result_df_path, nrows=0
+                    ).columns.tolist()
+
                     # 2. Force results_df to match the existing column order
                     results_df = results_df.reindex(columns=existing_columns)
                     header_mode = False
@@ -432,7 +443,7 @@ if __name__ == "__main__":
         n_training_tokens=FLAGS.n_training_tokens,
         lr_schedule_mode=FLAGS.lr_schedule_mode,
         head_dimension=FLAGS.head_dimension,
-        rng_seed=FLAGS.rng_seed
+        rng_seed=FLAGS.rng_seed,
     )
 
     runner.launch()

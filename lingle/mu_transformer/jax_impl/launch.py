@@ -180,11 +180,14 @@ def get_standard_scaling(lr):
 
 def get_rel_mup_scaling(lr):
     wm = FLAGS.config.d_model / FLAGS.config.d_base  # width multiple
-    
+
     # Raise warning if d_base does not divide d_model cleanly
     # This might be d_model < d_base and intended
     if FLAGS.config.d_model % FLAGS.config.d_base != 0:
-        warnings.warn(f"d_model / d_base != 0, make sure it is intended! Could be d_model < d_base", UserWarning)
+        warnings.warn(
+            f"d_model / d_base != 0, make sure it is intended! Could be d_model < d_base",
+            UserWarning,
+        )
 
     return {
         # embeddings
@@ -384,7 +387,7 @@ def automatic_modelname_factory():
         f"p{FLAGS.config.n_pretrain_step}",
         f"sm{FLAGS.config.lr_schedule_mode}",
         f"h{FLAGS.config.d_head}",
-        f"rng{FLAGS.rng_seed}"
+        f"rng{FLAGS.rng_seed}",
     ]
     return "_".join(parts)
 
@@ -1089,6 +1092,11 @@ def save_eval_loss():
 
 
 def main(argv):
+    """
+    Launch model training with arguments.
+    This is called in run_management.py to start training with
+    specified hyperparameters and settings.
+    """
     del argv
     logging.info("=== Start of main() ===")
 
@@ -1198,7 +1206,7 @@ def main(argv):
             training_stats = train_loop()  # capture output from the training loop
             # ==========================
 
-        # 2. ADDED RETURN: Send the data back to your orchestrator
+        # RETURN: Send the data back to training orchestrator from run_mangement.py
         run_end_time = datetime.now()
         run_wall_time = (run_end_time - run_start_time).total_seconds()
         if training_stats is not None:

@@ -46,8 +46,6 @@ class HyperparameterGrid:
         self.base_learning_rates = learning_rates
         self.base_init_stddevs = init_stddevs
 
-
-
         return {"learning_rates": learning_rates, "init_stddevs": init_stddevs}
 
 
