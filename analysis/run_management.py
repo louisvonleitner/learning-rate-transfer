@@ -27,7 +27,7 @@ class TrainingRun:
         n_training_tokens: int = None,
         lr_schedule_mode="clipping",
         head_dimension: int = 128,
-        rng_seed: int = 0,
+        rng_seed: int = 42,
     ):
         self.task_id = task_id
 
@@ -167,8 +167,7 @@ class TrainingRun:
 
         # Mocking the remaining flags from the third-party main() snippet you provided
         FLAGS.experiment_group = "grid_search"
-        # vvvvvvvv TODO: verify which RNG seed is used in training and remove this one (?)
-        FLAGS.rng_seed = 42
+        FLAGS.rng_seed = self.rng_seed
         FLAGS.rng_fold = 0
         FLAGS.wb_enabled = True  # Set to True if you want wandb
         FLAGS.wb_run = None
@@ -424,7 +423,7 @@ flags.DEFINE_integer("d_model", None, "Override model dimension via CLI")
 flags.DEFINE_integer("n_training_tokens", None, "Override pretraining steps via CLI")
 flags.DEFINE_string("lr_schedule_mode", "clipping", "Override lr schedule mode via CLI")
 flags.DEFINE_integer("head_dimension", 128, "Transformer Head Dimension")
-flags.DEFINE_integer("rng_seed", 0, "Random Generator Seed")
+flags.DEFINE_integer("rng_seed", 42, "Random Generator Seed")
 # --------------------------------------
 if not FLAGS.is_parsed():
     FLAGS(sys.argv)
