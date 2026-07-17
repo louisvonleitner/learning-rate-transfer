@@ -677,9 +677,14 @@ def train_loop():
             )
             if best_val_loss > val_metrics["loss_avg"]:
                 logging.info("Validation loss improved...")
-                if not FLAGS.config.no_checkpoint:
-                    do_save(save_checkpoint_mgr, step, state)
-                best_val_loss = val_metrics["loss_avg"]
+            # ============================================
+            # Changed by Louis
+            # saving model even when performance decreases
+            if not FLAGS.config.no_checkpoint:
+                do_save(save_checkpoint_mgr, step, state)
+            best_val_loss = val_metrics["loss_avg"]
+            # ============================================
+
             # ===================================
             # Removed by Louis
             # start profiler
