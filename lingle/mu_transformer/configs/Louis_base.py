@@ -84,7 +84,7 @@ def get_base_config():
 
     # periodic action settings
     config.n_print_step = 100  # print every
-    config.n_save_step = 2500  # checkpoint every
+    config.n_save_step = 7500  # checkpoint every
     config.n_eval_step = 100  # eval steps per checkpoint
     config.n_warmup_step = (
         2500  # warmup steps during pretraining - will be set later manually
