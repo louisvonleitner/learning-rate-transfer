@@ -376,7 +376,7 @@ def get_datasets(
         shard_id=shard_id,
         workdir=workdir,
         # added by louis vvvvv
-        max_tokens=26_600_000_000,
+        max_tokens=85_000_000,
     )
     logging.info("Calling read_dataset_to_memmap for all datasets...")
     if mode == "train" or mode == "validation":
