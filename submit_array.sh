@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH -p grete:interactive
-#SBATCH -G 1g.10gb:1
+#SBATCH -p grete:shared
+#SBATCH -G A100:1
 #SBATCH -c 16
 #SBATCH --array=0-44%45
-#SBATCH --mem=25G
+#SBATCH --mem=50G
 #SBATCH -t 1:00:00
 
 # --- Parse Flags passed from launch.sh ---

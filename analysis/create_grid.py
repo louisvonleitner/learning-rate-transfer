@@ -32,7 +32,7 @@ class HyperparameterGrid:
         Naive grid with parameter spacing log2 base.
         """
         min_lr_exponent = -10  # e.g. 2^{-10}
-        max_lr_exponent = -2  # e.g. 2^{-2}
+        max_lr_exponent = 1  # e.g. 2^{-2}
 
         learning_rates = np.logspace(min_lr_exponent, max_lr_exponent, n_lrs, base=2)
 
@@ -51,7 +51,7 @@ class HyperparameterGrid:
 
 if __name__ == "__main__":
     grid = HyperparameterGrid()
-    grid.populate_naive_grid(n_lrs=9, n_init_stddevs=5)
+    grid.populate_naive_grid(n_lrs=12, n_init_stddevs=5)
     combos = list(itertools.product(grid.base_learning_rates, grid.base_init_stddevs))
     pd.DataFrame(combos, columns=["base_lr", "base_init_stddev"]).to_csv(
         "grid_manifest.csv", index=False
