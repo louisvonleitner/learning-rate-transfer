@@ -35,9 +35,9 @@ export JAX_PLATFORMS=cpu
 
 echo "Launching preprocessing..."
 srun --ntasks=1 python mu_transformer/jax_impl/launch.py \
-    --config=mu_transformer/configs/Louis_base.py \
+    --config=mu_transformer/configs/Louis_small.py \
     --mode=train \
-    --workdir=./run_01 \
+    --workdir=./small_model \
     --config.sequence_len=1024 \
     --config.n_mesh_rows=1 \
     --config.n_mesh_cols=1 \
