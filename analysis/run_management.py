@@ -12,7 +12,7 @@ import jax
 
 # import Lingle adapted functions
 from mu_transformer.jax_impl.launch import main as lingle_main
-from mu_transformer.configs.Louis_base import get_config
+from mu_transformer.configs.Louis_small import get_config
 
 
 class TrainingRun:
@@ -22,7 +22,7 @@ class TrainingRun:
         base_lr: float,
         init_stddev: float,
         task_id: int,
-        workdir: str = "/mnt/vast-nhr/projects/bthesis_louis_vonleitner/mutransfer/lingle/run_01",
+        workdir: str = "/mnt/vast-nhr/projects/bthesis_louis_vonleitner/mutransfer/lingle/small_model",
         d_model: int = None,
         n_training_tokens: int = None,
         lr_schedule_mode="clipping",
@@ -38,7 +38,7 @@ class TrainingRun:
 
         # model parameters
         self.d_model = d_model
-        self.model_depth = 24  # same over all experiments
+        self.model_depth = self.cfg.n_layer  # 2 for small models
         self.head_dimension = head_dimension
         assert self.d_model % self.head_dimension == 0
         self.n_heads = self.d_model / self.head_dimension
@@ -84,7 +84,8 @@ class TrainingRun:
                 self.determine_chinchilla_optimal_n_training_tokens()
             )
         # If n_pretrain_step is given in bash script
-        elif n_training_tokens == 5_846_302_720:
+        # elif n_training_tokens == 5_846_302_720: <-- big model
+        elif n_training_tokens == 84_674_560:    # <-- small model
             self.n_training_tokens = n_training_tokens
         # this should not happen
         else:
@@ -127,7 +128,7 @@ class TrainingRun:
             "/projects/extern/CIDAS/cidas_digitalisierung_lehre/bthesis_louis_vonleitner/dir.project/mutransfer/results"
         )
         self.base_result_df_path = os.path.join(
-            self.base_folder_path, "run_results.csv"
+            self.base_folder_path, "run_results_small_model.csv"
         )
         self.run_folder_path = os.path.join(self.base_folder_path, self.run_id)
         self.run_losses_df_path = os.path.join(self.run_folder_path, "losses.csv")
@@ -422,7 +423,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_integer("d_model", None, "Override model dimension via CLI")
 flags.DEFINE_integer("n_training_tokens", None, "Override pretraining steps via CLI")
 flags.DEFINE_string("lr_schedule_mode", "clipping", "Override lr schedule mode via CLI")
-flags.DEFINE_integer("head_dimension", 128, "Transformer Head Dimension")
+flags.DEFINE_integer("head_dimension", 32, "Transformer Head Dimension")
 flags.DEFINE_integer("rng_seed", 42, "Random Generator Seed")
 # --------------------------------------
 if not FLAGS.is_parsed():
