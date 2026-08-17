@@ -1,11 +1,10 @@
 #!/bin/bash
-#SBATCH -p grete:shared
-#SBATCH -G A100:1
+#SBATCH -p grete:interactive
+#SBATCH -G 1g.10gb:1
 #SBATCH -c 16
 #SBATCH --array=0-44%45
-#SBATCH --constraint="inet"
-#SBATCH --mem=90G
-#SBATCH -t 2-00:00:00
+#SBATCH --mem=25G
+#SBATCH -t 1:00:00
 
 # --- Parse Flags passed from launch.sh ---
 while [[ $# -gt 0 ]]; do
@@ -54,20 +53,21 @@ conda activate mu_transformer
 
 
 # --- 3. Debug Environment Check (Optional but helpful) ---
-echo "Using Python from: $(which python)"
-if command -v nvidia-smi &> /dev/null; then
-    echo "Allocated CUDA Devices:"
-    nvidia-smi --query-gpu=index,name,memory.total --format=csv
-fi
-echo "--------------------------------------------------"
+# echo "Using Python from: $(which python)"
+# if command -v nvidia-smi &> /dev/null; then
+#     echo "Allocated CUDA Devices:"
+#     nvidia-smi --query-gpu=index,name,memory.total --format=csv
+# fi
+# echo "--------------------------------------------------"
 
 
 # build arguments for python
 PY_ARGS=(
-    --config=lingle/mu_transformer/configs/Louis_base.py
+    --config=lingle/mu_transformer/configs/Louis_small.py
     --mode=train
     --workdir=lingle/run_01
-    --config.tokens_per_global_batch=65536
+    # --config.tokens_per_global_batch=65536
+    --config.tokens_per_global_batch=16384
     --config.sequence_len=1024
     --config.n_mesh_rows=1
     --config.n_mesh_cols=1
@@ -76,7 +76,7 @@ PY_ARGS=(
     --config.hfds_identifier=allenai/c4
     --config.hfds_config=en
     --config.hfds_datacol=text
-    --wb_enabled=True
+    --wb_enabled=False
     --experiment_group="grid_search"
     --d_model="$DMODEL"
     --head_dimension="$HEAD_DIM"
@@ -88,13 +88,13 @@ if [[ "$N_TOKENS" != "None" ]]; then
 fi
 
 
-echo "=== SLURM DEBUG START ==="
-echo "Current Working Directory: $(pwd)"
-echo "Does 'analysis' directory exist?"
-ls -ld analysis 2>&1
-echo "Contents of 'analysis' directory (if it exists):"
-ls -l analysis 2>&1
-echo "=== SLURM DEBUG END ==="
+# echo "=== SLURM DEBUG START ==="
+# echo "Current Working Directory: $(pwd)"
+# echo "Does 'analysis' directory exist?"
+# ls -ld analysis 2>&1
+# echo "Contents of 'analysis' directory (if it exists):"
+# ls -l analysis 2>&1
+# echo "=== SLURM DEBUG END ==="
 
 
 # --- 4. Execute the Target Script ---

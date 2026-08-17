@@ -85,7 +85,7 @@ class TrainingRun:
             )
         # If n_pretrain_step is given in bash script
         # elif n_training_tokens == 5_846_302_720: <-- big model
-        elif n_training_tokens == 84_674_560:    # <-- small model
+        elif n_training_tokens == 1_638_400:    # <-- small model
             self.n_training_tokens = n_training_tokens
         # this should not happen
         else:

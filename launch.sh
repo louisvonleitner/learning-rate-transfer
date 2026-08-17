@@ -35,7 +35,7 @@ done
 
 # determine number of tokens if doing whole training
 if [[ "$N_TOKENS" == "whole" ]]; then
-    N_TOKENS="84_674_560"
+    N_TOKENS="1_638_400"
 elif [[ "$N_TOKENS" == "chinchilla" ]]; then
     N_TOKENS="None"
 fi
@@ -44,7 +44,7 @@ fi
 # This automatically formats your names so you don't have to type them out!
 JOB_NAME="${DMODEL}_${LR_MODE}"
 if [[ "$LR_MODE" == "clipping" ]]; then
-    if [[ "$N_TOKENS" == "84_674_560" ]]; then
+    if [[ "$N_TOKENS" == "1_638_400" ]]; then
         JOB_NAME="${DMODEL}_whole"
         OUTPUT_DIR="grid_logs_small/${HEAD_DIM}_${DMODEL}_whole_length"
     else
