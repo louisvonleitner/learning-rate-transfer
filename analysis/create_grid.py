@@ -51,7 +51,7 @@ class HyperparameterGrid:
 
 if __name__ == "__main__":
     grid = HyperparameterGrid()
-    grid.populate_naive_grid(n_lrs=10, n_init_stddevs=5)
+    grid.populate_naive_grid(n_lrs=9, n_init_stddevs=5)
     combos = list(itertools.product(grid.base_learning_rates, grid.base_init_stddevs))
     pd.DataFrame(combos, columns=["base_lr", "base_init_stddev"]).to_csv(
         "grid_manifest.csv", index=False
