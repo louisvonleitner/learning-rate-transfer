@@ -58,6 +58,10 @@ from mu_transformer.jax_impl.sow import split_and_name
 MODES = ["train", "validation", "test", "sample"]
 FLAGS = flags.FLAGS
 config_flags.DEFINE_config_file("config", None, "Configuration file", lock_config=False)
+# ===================
+# temporary vvvv
+# flags.DEFINE_integer("rng_seed", 42, "Random Generator Seed")
+# ===================
 flags.DEFINE_string("experiment_group", None, "Experiment group name")
 flags.DEFINE_string("workdir", None, "Working directory (GCS or local)")
 flags.DEFINE_enum("mode", None, MODES, "Mode")
@@ -383,9 +387,7 @@ def automatic_modelname_factory():
         f"n{FLAGS.config.ff_act_name}",
         f"o{FLAGS.config.optim_name}",
         f"r{FLAGS.config.optim_rule}",
-        f"s{FLAGS.config.lr_schedule_name}",
         f"p{FLAGS.config.n_pretrain_step}",
-        f"sm{FLAGS.config.lr_schedule_mode}",
         f"h{FLAGS.config.d_head}",
         f"rng{FLAGS.rng_seed}",
     ]
