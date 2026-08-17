@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # --- 1. Default Values ---
-DMODEL=128
-HEAD_DIM=128
-LR_MODE="clipping"
+DMODEL=32
+HEAD_DIM=32
+LR_MODE="relative"
 N_TOKENS="None"
 
 
@@ -44,7 +44,7 @@ fi
 # This automatically formats your names so you don't have to type them out!
 JOB_NAME="${DMODEL}_${LR_MODE}"
 if [[ "$LR_MODE" == "clipping" ]]; then
-    if [[ "$N_TOKENS" == "5_846_302_720" ]]; then
+    if [[ "$N_TOKENS" == "84_674_560" ]]; then
         JOB_NAME="${DMODEL}_whole"
         OUTPUT_DIR="grid_logs/${HEAD_DIM}_${DMODEL}_whole_length"
     else
