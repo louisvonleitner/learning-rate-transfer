@@ -1,6 +1,6 @@
 #!/bin/bash
 
-N_TOKENS=1_638_400
+N_TOKENS=16_384_000
 ./launch.sh --d_model 32 --head_dimension 32 --lr_schedule_mode relative --n_training_tokens $N_TOKENS
 ./launch.sh --d_model 64 --head_dimension 32 --lr_schedule_mode relative --n_training_tokens $N_TOKENS
 ./launch.sh --d_model 128 --head_dimension 32 --lr_schedule_mode relative --n_training_tokens $N_TOKENS
