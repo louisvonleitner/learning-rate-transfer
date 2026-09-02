@@ -5,6 +5,7 @@ DMODEL=32
 HEAD_DIM=32
 LR_MODE="relative"
 N_TOKENS="None"
+RANDOM_SEED=42
 
 
 # --- 2. Parse Flags passed to ./launch.sh ---
@@ -24,6 +25,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --n_training_tokens)
       N_TOKENS="$2"
+      shift 2
+      ;;
+    --random_seed)
+      RANDOM_SEED="$2"
       shift 2
       ;;
     *)
@@ -70,4 +75,5 @@ sbatch \
   --d_model "$DMODEL" \
   --head_dimension "$HEAD_DIM" \
   --lr_schedule_mode "$LR_MODE" \
-  --n_training_tokens "$N_TOKENS"
+  --n_training_tokens "$N_TOKENS" \
+  --random_seed "$RANDOM_SEED"

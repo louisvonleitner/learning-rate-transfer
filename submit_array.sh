@@ -2,7 +2,7 @@
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
 #SBATCH -c 16
-#SBATCH --array=0-99%100
+#SBATCH --array=0-100%40
 #SBATCH --mem=50G
 #SBATCH -t 1:00:00
 
@@ -13,6 +13,7 @@ while [[ $# -gt 0 ]]; do
     --head_dimension) HEAD_DIM="$2"; shift 2 ;;
     --lr_schedule_mode) LR_MODE="$2"; shift 2 ;;
     --n_training_tokens) N_TOKENS="$2"; shift 2 ;;
+    --random_seed) RANDOM_SEED="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -81,6 +82,7 @@ PY_ARGS=(
     --d_model="$DMODEL"
     --head_dimension="$HEAD_DIM"
     --lr_schedule_mode="$LR_MODE"
+    --rng_seed="$RANDOM_SEED"
 )
 # dynamic logic for n_training_tokens
 if [[ "$N_TOKENS" != "None" ]]; then

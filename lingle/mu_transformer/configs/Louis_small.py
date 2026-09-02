@@ -91,7 +91,7 @@ def get_base_config():
     )
     config.n_pretrain_step = 2500  # pretraining steps - will be set later manually
     config.n_finetune_step = 0  # finetuning steps, keep zero during pretraining
-    config.no_checkpoint = False  # skip saving the model
+    config.no_checkpoint = True # skip saving the model
 
     # sampling settings
     config.sampling_method = "nucleus"

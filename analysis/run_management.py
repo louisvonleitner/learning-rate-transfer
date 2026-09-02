@@ -169,6 +169,7 @@ class TrainingRun:
         # Mocking the remaining flags from the third-party main() snippet you provided
         FLAGS.experiment_group = "grid_search"
         FLAGS.rng_seed = self.rng_seed
+        print(f"Set random seed to {self.rng_seed}")
         FLAGS.rng_fold = 0
         FLAGS.wb_enabled = True  # Set to True if you want wandb
         FLAGS.wb_run = None
