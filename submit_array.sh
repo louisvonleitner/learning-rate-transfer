@@ -2,7 +2,7 @@
 #SBATCH -p grete:shared
 #SBATCH -G A100:1
 #SBATCH -c 16
-#SBATCH --array=0-100%40
+#SBATCH --array=0-45%45
 #SBATCH --mem=50G
 #SBATCH -t 1:00:00
 

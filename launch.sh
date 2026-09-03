@@ -49,7 +49,7 @@ fi
 # This automatically formats your names so you don't have to type them out!
 JOB_NAME="${DMODEL}_${LR_MODE}"
 if [[ "$LR_MODE" == "clipping" ]]; then
-    if [[ "$N_TOKENS" == "1_638_400" ]]; then
+    if [[ "$N_TOKENS" == "16_384_000" ]]; then
         JOB_NAME="${DMODEL}_whole"
         OUTPUT_DIR="grid_logs_small/${HEAD_DIM}_${DMODEL}_whole_length"
     else
