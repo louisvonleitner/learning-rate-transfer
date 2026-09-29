@@ -432,7 +432,7 @@ if not FLAGS.is_parsed():
 # main launching function
 if __name__ == "__main__":
     task_id = int(os.environ["SLURM_ARRAY_TASK_ID"])
-    row = pd.read_csv("analysis/grid_manifest.csv").iloc[task_id]
+    row = pd.read_csv("experiment_management/grid_manifest.csv").iloc[task_id]
 
     runner = TrainingRun(
         base_lr=row["base_lr"],

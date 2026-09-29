@@ -59,7 +59,6 @@ fi
 OUTPUT_LOG="${OUTPUT_DIR}/grid_%A_%a.log"
 
 # Create the log directory automatically if it doesn't exist
-cd ../..
 mkdir -p "$OUTPUT_DIR"
 
 # --- 4. Launch sbatch ---
