@@ -19,25 +19,32 @@ class TrainingRun:
 
     def __init__(
         self,
-        d_model: int,
         base_lr: float,
         init_stddev: float,
+        task_id: int,
         workdir: str = "/mnt/vast-nhr/projects/bthesis_louis_vonleitner/mutransfer/lingle/run_01",
-        n_training_tokens=None,
+        d_model: int = None,
+        n_training_tokens: int = None,
+        lr_schedule_mode="clipping",
+        head_dimension: int = 128,
+        rng_seed: int = 42,
     ):
+        self.task_id = task_id
 
         # get base config
         self.cfg = get_config()
 
+        self.rng_seed = rng_seed
+
         # model parameters
         self.d_model = d_model
         self.model_depth = 24  # same over all experiments
-        self.head_dimension = 128  # same over all experiments
+        self.head_dimension = head_dimension
         assert self.d_model % self.head_dimension == 0
         self.n_heads = self.d_model / self.head_dimension
-        self.d_ffn = d_model * 4
+        self.d_ffn = self.d_model * 4
 
-        # model size
+        # model size / parameter count
         self.vocab_size = 32128  # from T5 Tokenizer
         self.n_params_embedding = self.vocab_size * self.d_model
         self.n_params_encoder = self.n_params_embedding
@@ -60,6 +67,7 @@ class TrainingRun:
         self.base_lr = base_lr
         self.max_lr = self.base_lr
         self.lr_schedule_name = self.cfg.lr_schedule_name
+        self.lr_schedule_mode = lr_schedule_mode
         self.optim_name = self.cfg.optim_name
         self.optim_beta1 = self.cfg.optim_beta1
         self.optim_beta2 = self.cfg.optim_beta2
@@ -70,26 +78,33 @@ class TrainingRun:
         self.init_stddev = init_stddev
         self.absolute_init_stddev = self.init_stddev * self.d_model**-0.5
 
-        # Chinchilla is used if n_training_tokens == None
-        if n_training_tokens == None:
+        # Chinchilla is used if n_training_tokens was not given in bash script
+        if n_training_tokens is None:
             self.n_training_tokens = (
                 self.determine_chinchilla_optimal_n_training_tokens()
             )
-        # If n_training_tokens is given
-        else:
+        # If n_pretrain_step is given in bash script
+        elif n_training_tokens == 5_846_302_720:
             self.n_training_tokens = n_training_tokens
+        # this should not happen
+        else:
+            raise Exception(
+                f"Bash Script's pretrain tokens are {n_training_tokens}, which should not be the case"
+            )
 
         # batch and sequence length
         self.tokens_per_global_batch = self.cfg.tokens_per_global_batch
         self.sequence_len = self.cfg.sequence_len
         assert self.tokens_per_global_batch % self.sequence_len == 0
         self.batch_size = self.tokens_per_global_batch / self.sequence_len
-        self.n_pretrain_steps = np.ceil(
-            self.n_training_tokens / self.tokens_per_global_batch
+        self.n_pretrain_step = int(
+            np.ceil(self.n_training_tokens / self.tokens_per_global_batch)
         )
-        self.n_warmup_steps = self.determine_n_warmup_steps()
+        self.n_warmup_step = int(
+            self.determine_n_warmup_step(mode=self.lr_schedule_mode)
+        )
 
-        assert self.n_warmup_steps <= self.n_pretrain_steps
+        assert self.n_warmup_step <= self.n_pretrain_step
 
         # getting absolute lrs after mup
         self.absolute_lrs = self.get_abs_mup_scaling(
@@ -136,8 +151,12 @@ class TrainingRun:
         self.cfg.absolute_init_stddev = self.absolute_init_stddev
         self.cfg.n_layer = self.model_depth
         self.cfg.d_head = self.head_dimension
-        self.cfg.n_pretrain_steps = self.n_pretrain_steps
-        self.cfg.n_warmup_steps = self.n_warmup_steps
+        self.cfg.n_pretrain_step = self.n_pretrain_step
+        self.cfg.n_warmup_step = self.n_warmup_step
+        self.cfg.lr_schedule_mode = self.lr_schedule_mode
+        self.cfg.qk_scale = (
+            1 / self.cfg.d_head
+        )  # might have to be updated again, so we do it here
 
         # 3. Spoof the FLAGS object for the third-party library.
         # ===================================================================
@@ -148,7 +167,7 @@ class TrainingRun:
 
         # Mocking the remaining flags from the third-party main() snippet you provided
         FLAGS.experiment_group = "grid_search"
-        FLAGS.rng_seed = 42
+        FLAGS.rng_seed = self.rng_seed
         FLAGS.rng_fold = 0
         FLAGS.wb_enabled = True  # Set to True if you want wandb
         FLAGS.wb_run = None
@@ -157,7 +176,7 @@ class TrainingRun:
         FLAGS.verbosity = 0
 
     def generate_run_id(self):
-        return str(self.d_model) + "_" + str(datetime.now())
+        return str(self.d_model) + "_" + str(self.task_id) + "_" + str(datetime.now())
 
     def determine_chinchilla_optimal_n_training_tokens(
         self, chinchilla_multiplier: float = 20
@@ -166,29 +185,49 @@ class TrainingRun:
         # the accuracy is not totally important, this is a proof of concept
 
         self.n_training_tokens = chinchilla_multiplier * self.n_parameters
+        print(
+            f"Using {self.n_training_tokens} training tokens according to chinchilla.",
+            flush=True,
+        )
+        print(f"Number of Parameters in the model is {self.n_parameters}", flush=True)
         return self.n_training_tokens
 
-    def determine_n_warmup_steps(self):
+    def determine_n_warmup_step(self, mode="clipping"):
         """
         Determines the number of warmup iterations.
+
+        mode == clipping:
         At least 10,000 warmup iterations are recommended for training stability in NLP.
         Therefore, we clip the warmup iterations to 10,000 if there would be less.
+        If there are not even 10,000 iterations in total, we clip the warmup iterations to the total number of training steps.
+
+        mode == relative:
+        We set the number of warmup iterations as exactly 10_000/89_208-th of the total pretrain iterations.
         """
-        fraction = int(self.n_pretrain_steps / 10)
+        # so far used for whole training: 89_208 total steps and 10_000 warmup steps
+        factor = 10_000 / 89_208
+        fraction = int(self.n_pretrain_step * factor)
 
-        if fraction < 10_000:
-            if self.n_pretrain_steps >= 10_000:
-                self.n_warmup_steps = 10_000
+        if mode == "clipping":
+            if fraction < 10_000:
+                if self.n_pretrain_step >= 10_000:
+                    self.n_warmup_step = 10_000
+                else:
+                    self.n_warmup_step = self.n_pretrain_step
+                    print(
+                        "All training iterations are warmup iterations, because n_iterations {self.n_pretrain_step} < 10,000...",
+                        flush=True,
+                    )
             else:
-                self.n_warmup_steps = self.n_pretrain_steps
-                print(
-                    "All training iterations are warmup iterations, because n_iterations {self.n_pretrain_steps} < 10,000...",
-                    flush=True,
-                )
+                self.n_warmup_step = int(fraction)
+        elif mode == "relative":
+            self.n_warmup_step = int(fraction)
         else:
-            self.n_warmup_steps = fraction
+            raise Exception(
+                "Mode {mode} is not a valid option, choose from [clipping, relative]."
+            )
 
-        return self.n_warmup_steps
+        return self.n_warmup_step
 
     def determine_theoretical_flops_and_walltime(self, GPU="A100", GPU_stats=None):
         """
@@ -226,16 +265,16 @@ class TrainingRun:
         dff = d_model * ffn_factor
         return {
             # embeddings
-            "embedding_matrix_lr": lr,
+            "embedding_matrix_lr": base_lr,
             # attention
-            "attention_weight_matrix_lr": lr / dm,
-            "attention_bias_lr": lr,
+            "attention_weight_matrix_lr": base_lr / dm,
+            "attention_bias_lr": base_lr,
             # feed-forward
-            "w_ffn_in_lr": lr / dm,
-            "w_ffn_out_lr": lr / dff,
-            "bias_lr": lr,
+            "w_ffn_in_lr": base_lr / dm,
+            "w_ffn_out_lr": base_lr / dff,
+            "bias_lr": base_lr,
             # unembedding
-            "unembedding_matrix_lr": lr / dm,
+            "unembedding_matrix_lr": base_lr / dm,
         }
 
     def save_run_results(self, variables_to_save=None):
@@ -265,6 +304,8 @@ class TrainingRun:
                     "n_params_transformer_block",
                     "n_parameters",
                     "base_lr",
+                    "init_stddev",
+                    "absolute_init_stddev",
                     "max_lr",
                     "lr_schedule_name",
                     "optim_name",
@@ -276,8 +317,8 @@ class TrainingRun:
                     "tokens_per_global_batch",
                     "batch_size",
                     "sequence_len",
-                    "n_pretrain_steps",
-                    "n_warmup_steps",
+                    "n_pretrain_step",
+                    "n_warmup_step",
                     "embedding_matrix_lr",
                     "attention_weight_matrix_lr",
                     "attention_bias_lr",
@@ -291,6 +332,8 @@ class TrainingRun:
                     "final_loss",
                     "best_loss",
                     "training_wall_time",
+                    "lr_schedule_mode",
+                    "rng_seed",
                 ]
             # variables_to_save is not None
             else:
@@ -308,14 +351,27 @@ class TrainingRun:
             # handle simultaneous accessing of file by locking it
             lock = FileLock(self.base_result_df_path + ".lock")
             with lock:
+                # Check if file exists and has content
+                file_exists = (
+                    os.path.exists(self.base_result_df_path)
+                    and os.path.getsize(self.base_result_df_path) > 0
+                )
+
+                if file_exists:
+                    # 1. Read ONLY the header row of the existing CSV
+                    existing_columns = pd.read_csv(
+                        self.base_result_df_path, nrows=0
+                    ).columns.tolist()
+
+                    # 2. Force results_df to match the existing column order
+                    results_df = results_df.reindex(columns=existing_columns)
+                    header_mode = False
+                else:
+                    header_mode = True  # Empty file means we write the header in variables_to_save order
+
                 with open(self.base_result_df_path, "a") as f:
-                    header_mode = f.tell() == 0  # empty file means no header yet
                     # write with pd.to_csv
                     results_df.to_csv(f, index=False, mode="a", header=header_mode)
-
-            print(
-                f"Wrote results of run to global result csv. at {self.base_result_df_path}"
-            )
 
             # Write loss time series to csv
             # ===================================
@@ -360,92 +416,34 @@ class TrainingRun:
         return run_stats
 
 
-class HyperparameterGrid:
-
-    def __init__(self, grid_with_results: dict = None):
-
-        # sweep variables
-        if grid_with_results is None:
-            self.base_learning_rates = []
-            self.base_init_stddevs = []
-
-            self.update_sweep_variables()
-
-        # if grid_with_results exists
-        else:
-            # TODO: read out grid and optimal lr and init var
-            pass
-
-    def update_sweep_variables(variables: list = None):
-        self.potential_sweep_variables = {
-            "base_lr": self.base_learning_rates,
-            "base_init_stddev": self.base_init_stddevs,
-        }
-        self.sweep_variables = self.potential_sweep_variables[variables]
-
-    def populate_naive_grid(self, n_lrs: int = 5, n_init_vars: int = 5):
-        """
-        Naive grid with parameter spacing log2 base.
-        """
-        min_lr_exponent = -10  # e.g. 2^{-10}
-        max_lr_exponent = -2  # e.g. 2^{-2}
-
-        learning_rates = np.logspace(min_lr_exponent, max_lr_exponent, n_lrs, base=2)
-
-        min_init_var_exponent = -5
-        max_init_var_exponent = 5
-
-        init_variances = np.logspace(
-            min_init_var_exponent, max_init_var_exponent, n_init_vars, base=2
-        )
-
-        self.base_learning_rates = learning_rates
-        self.base_init_stddevs = init_stddevs
-
-        return {"learning_rates": learning_rates, "init_variances": init_variances}
-
-    def launch_grid_search(self, d_model, n_trianing_tokens: int = None):
-        """
-        Launch grid search with self.sweep_variables
-        """
-        grid_dict = self.sweep_variables
-        if grid_dict == {}:
-            raise Exception(
-                "Grid for grid search is empty. Forgot to update_sweep_variables()?"
-            )
-
-        # extract hyperparameters
-        hyperparameters = grid_dict.keys()
-        values = grid_dict.values()
-
-        # create grid with cartesian product - [{lr, init_var}, {lr, init_var}, ...]
-        grid = [dict(zip(keys, v)) for v in itertools.product(*values)]
-
-        # create TrainingRun instance
-        for combination in grid:
-            base_lr = combination["base_lr"]
-            base_init_stddev = combination["base_init_stddev"]
-            run = TrainingRun(
-                d_model=d_model,
-                base_lr=base_lr,
-                init_stddev=base_init_stddev,
-                n_training_tokens=n_trianing_tokens,
-                # workdir: automatically set right
-            )
-
-
 # Parse the CLI arguments if they haven't been parsed yet.
 FLAGS = flags.FLAGS
+# --- Register Louis's CLI Overrides ---
+flags.DEFINE_integer("d_model", None, "Override model dimension via CLI")
+flags.DEFINE_integer("n_training_tokens", None, "Override pretraining steps via CLI")
+flags.DEFINE_string("lr_schedule_mode", "clipping", "Override lr schedule mode via CLI")
+flags.DEFINE_integer("head_dimension", 128, "Transformer Head Dimension")
+flags.DEFINE_integer("rng_seed", 42, "Random Generator Seed")
+# --------------------------------------
 if not FLAGS.is_parsed():
     FLAGS(sys.argv)
 
+
+# main launching function
 if __name__ == "__main__":
-    # Example: A simple Pythonic loop for a grid search
-    lr = 0.01
-    stddev = 1.0
+    task_id = int(os.environ["SLURM_ARRAY_TASK_ID"])
+    row = pd.read_csv("analysis/grid_manifest.csv").iloc[task_id]
 
     runner = TrainingRun(
-        d_model=128, base_lr=lr, init_stddev=stddev, n_training_tokens=163_840_000
+        base_lr=row["base_lr"],
+        init_stddev=row["base_init_stddev"],
+        task_id=task_id,
+        d_model=FLAGS.d_model,
+        n_training_tokens=FLAGS.n_training_tokens,
+        lr_schedule_mode=FLAGS.lr_schedule_mode,
+        head_dimension=FLAGS.head_dimension,
+        rng_seed=FLAGS.rng_seed,
     )
+
     runner.launch()
     runner.save_run_results()

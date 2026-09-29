@@ -13,6 +13,7 @@
 # limitations under the License.
 import functools
 import os
+import warnings
 import posixpath
 import re
 import sys
@@ -60,7 +61,7 @@ config_flags.DEFINE_config_file("config", None, "Configuration file", lock_confi
 flags.DEFINE_string("experiment_group", None, "Experiment group name")
 flags.DEFINE_string("workdir", None, "Working directory (GCS or local)")
 flags.DEFINE_enum("mode", None, MODES, "Mode")
-flags.DEFINE_integer("rng_seed", 0, "Experiment rng seed")
+# flags.DEFINE_integer("rng_seed", 0, "Experiment rng seed")
 flags.DEFINE_boolean("rng_fold", False, "Fold bsz, train steps, width, depth into rng")
 flags.DEFINE_boolean("wb_enabled", False, "Log to W&B")
 flags.DEFINE_string("wb_run", None, "W&B run id, for resuming with continuity")
@@ -178,7 +179,16 @@ def get_standard_scaling(lr):
 
 
 def get_rel_mup_scaling(lr):
-    wm = FLAGS.config.d_model // FLAGS.config.d_base  # width multiple
+    wm = FLAGS.config.d_model / FLAGS.config.d_base  # width multiple
+
+    # Raise warning if d_base does not divide d_model cleanly
+    # This might be d_model < d_base and intended
+    if FLAGS.config.d_model % FLAGS.config.d_base != 0:
+        warnings.warn(
+            f"d_model / d_base != 0, make sure it is intended! Could be d_model < d_base",
+            UserWarning,
+        )
+
     return {
         # embeddings
         "g_e": lr,
@@ -366,6 +376,7 @@ def automatic_modelname_factory():
         f"d{FLAGS.config.dtype}",
         f"b{FLAGS.config.tokens_per_global_batch}",
         f"a{FLAGS.config.lr_base}",
+        f"v{FLAGS.config.init_stddev}",
         f"w{FLAGS.config.wd}",
         f"m{FLAGS.config.d_model}",
         f"l{FLAGS.config.n_layer}",
@@ -374,6 +385,9 @@ def automatic_modelname_factory():
         f"r{FLAGS.config.optim_rule}",
         f"s{FLAGS.config.lr_schedule_name}",
         f"p{FLAGS.config.n_pretrain_step}",
+        f"sm{FLAGS.config.lr_schedule_mode}",
+        f"h{FLAGS.config.d_head}",
+        f"rng{FLAGS.rng_seed}",
     ]
     return "_".join(parts)
 
@@ -663,19 +677,24 @@ def train_loop():
             )
             if best_val_loss > val_metrics["loss_avg"]:
                 logging.info("Validation loss improved...")
-                if not FLAGS.config.no_checkpoint:
-                    do_save(save_checkpoint_mgr, step, state)
-                best_val_loss = val_metrics["loss_avg"]
+            # ============================================
+            # Changed by Louis
+            # saving model even when performance decreases
+            if not FLAGS.config.no_checkpoint:
+                do_save(save_checkpoint_mgr, step, state)
+            best_val_loss = val_metrics["loss_avg"]
+            # ============================================
+
             # ===================================
             # Removed by Louis
             # start profiler
-            if jax.process_index() == 0 and step == FLAGS.config.n_save_step:
-                assert FLAGS.config.n_save_step > FLAGS.config.n_print_step
-                logging.info("Starting profiler trace...")
-                jax.profiler.start_trace(
-                    log_dir=modeldir_factory("save", "logging"),
-                    # create_perfetto_trace=True,  # write extra trace file for perfetto
-                )
+            # if jax.process_index() == 0 and step == FLAGS.config.n_save_step:
+            #     assert FLAGS.config.n_save_step > FLAGS.config.n_print_step
+            #     logging.info("Starting profiler trace...")
+            #     jax.profiler.start_trace(
+            #         log_dir=modeldir_factory("save", "logging"),
+            #         # create_perfetto_trace=True,  # write extra trace file for perfetto
+            #     )
             # ===================================
             logging.debug("Done with evaluation action...")
 
@@ -1078,6 +1097,11 @@ def save_eval_loss():
 
 
 def main(argv):
+    """
+    Launch model training with arguments.
+    This is called in run_management.py to start training with
+    specified hyperparameters and settings.
+    """
     del argv
     logging.info("=== Start of main() ===")
 
@@ -1187,7 +1211,7 @@ def main(argv):
             training_stats = train_loop()  # capture output from the training loop
             # ==========================
 
-        # 2. ADDED RETURN: Send the data back to your orchestrator
+        # RETURN: Send the data back to training orchestrator from run_mangement.py
         run_end_time = datetime.now()
         run_wall_time = (run_end_time - run_start_time).total_seconds()
         if training_stats is not None:

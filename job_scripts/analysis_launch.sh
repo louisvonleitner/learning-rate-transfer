@@ -52,7 +52,7 @@ echo "--------------------------------------------------"
 
 # --- 4. Execute the Target Script ---
 echo "Launching model training..."
-srun python analysis/make_run_matrix.py \
+srun python analysis/run_management.py \
     --config=lingle/mu_transformer/configs/Louis_base.py \
     --mode=train \
     --workdir=lingle/run_01 \
