@@ -59,6 +59,7 @@ fi
 OUTPUT_LOG="${OUTPUT_DIR}/grid_%A_%a.log"
 
 # Create the log directory automatically if it doesn't exist
+cd ../..
 mkdir -p "$OUTPUT_DIR"
 
 # --- 4. Launch sbatch ---
@@ -66,7 +67,7 @@ echo "Submitting SLURM job: $JOB_NAME"
 sbatch \
   --job-name="$JOB_NAME" \
   --output="$OUTPUT_LOG" \
-  submit_array.sh \
+  experiment_pipeline/launching/submit_array.sh \
   --d_model "$DMODEL" \
   --head_dimension "$HEAD_DIM" \
   --lr_schedule_mode "$LR_MODE" \
