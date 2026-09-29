@@ -226,4 +226,4 @@ Other limitations:
 
 Computing time was provided on the supercomputer Emmy/Grete at NHR-Nord@Göttingen as part of the NHR infrastructure (project `bthesis_louis_vonleitner`).
 
-The project was built on Lingle's github repository with the Apache 2.0 license. Thanks for providing it under this license.
+The project was built on Lucas Lingle's public [`mu_transformer`](https://github.com/lucaslingle/mu_transformer) Github repository with the Apache 2.0 license. Thanks for providing it under this license.
